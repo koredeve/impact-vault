@@ -1,89 +1,94 @@
+import pytest
 import json
+import re
 
-TARGET_GOAL = 10_000_000_000_000_000_000  # 10 ETH in atto
+TARGET_GOAL = 10_000_000_000_000_000_000  # 10 ETH/GEN in atto
 
 
-def _deploy(direct_vm, direct_deploy, who):
-    direct_vm.sender = who
+def _deploy(direct_vm, direct_deploy, sender):
+    direct_vm.sender = sender
     return direct_deploy("contracts/ImpactVault.py")
 
 
-def _create_sample_campaign(direct_vm, contract, creator, beneficiary, cid="camp-1"):
+def _create_sample_campaign(direct_vm, contract, creator, beneficiary, cid="camp-1", category="DeFi"):
     direct_vm.sender = creator
-    titles = ["M1: Architecture & Prototype", "M2: Core Protocol & Testnet", "M3: Security Audit & Mainnet"]
-    criteria = [
-        "Complete technical spec and functional MVP prototype with test coverage.",
-        "Deploy full protocol to GenLayer StudioNet with frontend demo.",
-        "Third-party security audit completed with all critical findings resolved.",
-    ]
-    bps = [2500, 3500, 4000]  # 25%, 35%, 40% = 100%
     contract.create_campaign(
         cid,
         beneficiary,
-        "GenLayer Cross-Chain Liquidity Hub",
-        "Next-generation decentralized liquidity infrastructure on GenLayer.",
+        "Decentralized Liquidity Engine",
+        category,
+        "High-performance automated liquidity vault on GenLayer.",
         TARGET_GOAL,
-        titles,
-        criteria,
-        bps,
+        ["Milestone 1: Spec & Prototype", "Milestone 2: Testnet Deployment", "Milestone 3: Security Audit"],
+        [
+            "Open source GitHub repo with prototype and unit test coverage > 80%.",
+            "Deployed smart contracts on StudioNet with interactive frontend.",
+            "Complete audit report from recognized firm with zero high-severity issues.",
+        ],
+        [2500, 3500, 4000],  # 25%, 35%, 40% = 10000 bps
     )
 
 
 def test_create_campaign_success_and_views(direct_vm, direct_deploy, direct_alice, direct_bob):
-    """Creator creates a 3-milestone campaign and view methods reflect exact initial state."""
+    """Creating a valid campaign initializes status, milestones, and platform metrics."""
     contract = _deploy(direct_vm, direct_deploy, direct_alice)
-    _create_sample_campaign(direct_vm, contract, direct_alice, direct_bob, "camp-1")
-
-    assert contract.total_campaigns() == 1
-    ids = contract.get_campaign_ids()["ids"]
-    assert ids == ["camp-1"]
+    _create_sample_campaign(direct_vm, contract, direct_alice, direct_bob, "camp-1", "DeFi")
 
     camp = contract.get_campaign("camp-1")
-    assert camp["title"] == "GenLayer Cross-Chain Liquidity Hub"
-    assert camp["status"] == "funding"
+    assert camp["creator"].startswith("0x")
+    assert camp["beneficiary"].startswith("0x")
+    assert camp["title"] == "Decentralized Liquidity Engine"
+    assert camp["category"] == "DeFi"
     assert camp["target_amount"] == TARGET_GOAL
     assert camp["total_funded"] == 0
     assert camp["total_released"] == 0
     assert camp["current_milestone_index"] == 0
     assert camp["total_milestones"] == 3
+    assert camp["status"] == "funding"
 
     assert contract.get_milestones_count("camp-1") == 3
     m0 = contract.get_milestone("camp-1", 0)
-    assert m0["title"] == "M1: Architecture & Prototype"
+    assert m0["title"] == "Milestone 1: Spec & Prototype"
     assert m0["bps"] == 2500
     assert m0["status"] == "pending"
-    assert m0["deliverable_desc"] == ""
-    assert m0["evidence_urls"] == []
+
+    metrics = contract.get_platform_metrics()
+    assert metrics["total_campaigns"] == 1
+    assert metrics["funding_campaigns"] == 1
+    assert metrics["total_funded_atto"] == 0
 
 
 def test_create_campaign_invalid_bps_sum_reverts(direct_vm, direct_deploy, direct_alice, direct_bob):
-    """Milestone basis points must sum exactly to 10000 (100%)."""
+    """Milestone BPS not summing to 10,000 reverts with clear expected error."""
     contract = _deploy(direct_vm, direct_deploy, direct_alice)
     direct_vm.sender = direct_alice
 
     with direct_vm.expect_revert("Milestone bps must sum exactly to 10000"):
         contract.create_campaign(
-            "bad-camp",
+            "bad-bps",
             direct_bob,
-            "Bad Split Project",
-            "Description",
+            "Title",
+            "AI / Agents",
+            "Desc",
             TARGET_GOAL,
             ["M1", "M2"],
             ["Crit 1", "Crit 2"],
-            [4000, 4000],  # 8000 != 10000
+            [5000, 4000],  # 9000 != 10000
         )
 
 
-def test_create_campaign_empty_fields_and_duplicate_id_reverts(direct_vm, direct_deploy, direct_alice, direct_bob):
-    """Empty strings, zero target amounts, and duplicate campaign IDs are rejected."""
+def test_create_campaign_empty_fields_and_duplicate_id_reverts(
+    direct_vm, direct_deploy, direct_alice, direct_bob
+):
+    """Empty id, zero target, or duplicate id reverts."""
     contract = _deploy(direct_vm, direct_deploy, direct_alice)
     direct_vm.sender = direct_alice
 
     with direct_vm.expect_revert("must not be empty"):
-        contract.create_campaign("", direct_bob, "T", "D", TARGET_GOAL, ["M1"], ["C1"], [10000])
+        contract.create_campaign("", direct_bob, "T", "DeFi", "D", TARGET_GOAL, ["M1"], ["C1"], [10000])
 
     with direct_vm.expect_revert("Target amount must be positive"):
-        contract.create_campaign("c-zero", direct_bob, "T", "D", 0, ["M1"], ["C1"], [10000])
+        contract.create_campaign("c-zero", direct_bob, "T", "DeFi", "D", 0, ["M1"], ["C1"], [10000])
 
     _create_sample_campaign(direct_vm, contract, direct_alice, direct_bob, "c-dup")
     with direct_vm.expect_revert("Campaign id already exists"):
@@ -115,6 +120,9 @@ def test_fund_campaign_activates_when_target_reached(direct_vm, direct_deploy, d
     assert camp["total_funded"] == 10_000_000_000_000_000_000
     assert contract.get_backer_contribution("camp-1", direct_bob) == 6_000_000_000_000_000_000
 
+    backers = contract.get_campaign_backers("camp-1")["backers"]
+    assert len(backers) == 2
+
 
 def test_submit_deliverable_access_control_and_https_validation(
     direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie
@@ -128,22 +136,22 @@ def test_submit_deliverable_access_control_and_https_validation(
     direct_vm.value = TARGET_GOAL
     contract.fund_campaign("camp-1")
 
-    # Unauthorized party tries to submit
+    # Unauthorized submitter reverts
     direct_vm.sender = direct_charlie
-    with direct_vm.expect_revert("Only beneficiary or creator"):
-        contract.submit_deliverable("camp-1", 0, "Fake deliverable", ["https://github.com/repo"])
+    with direct_vm.expect_revert("Only beneficiary or creator may submit deliverables"):
+        contract.submit_deliverable("camp-1", 0, "Fake deliverable", ["https://github.com/org/repo"])
 
-    # Beneficiary submits non-https URL -> rejected
+    # Beneficiary submits with invalid http URL reverts
     direct_vm.sender = direct_bob
     with direct_vm.expect_revert("Evidence URL must start with https://"):
-        contract.submit_deliverable("camp-1", 0, "Valid spec", ["http://insecure-site.com/spec"])
+        contract.submit_deliverable("camp-1", 0, "Deliverable", ["http://insecure.org/repo"])
 
     # Beneficiary submits valid deliverable
     contract.submit_deliverable(
         "camp-1",
         0,
         "Completed architecture spec and GitHub prototype.",
-        ["https://github.com/org/prototype", "https://docs.org/spec"],
+        ["https://github.com/org/repo", "https://prototype.org/demo"],
     )
 
     m0 = contract.get_milestone("camp-1", 0)
@@ -152,10 +160,10 @@ def test_submit_deliverable_access_control_and_https_validation(
     assert m0["deliverable_desc"] == "Completed architecture spec and GitHub prototype."
 
 
-def test_evaluate_milestone_approved_releases_tranche_and_advances(
+def test_evaluate_milestone_with_web_evidence_and_release(
     direct_vm, direct_deploy, direct_alice, direct_bob
 ):
-    """When AI validators approve Milestone 1 (25%), 2.5 ETH is credited to beneficiary and M2 becomes active."""
+    """When AI validators evaluate live web evidence and approve, tranche is credited to beneficiary."""
     contract = _deploy(direct_vm, direct_deploy, direct_alice)
     _create_sample_campaign(direct_vm, contract, direct_alice, direct_bob, "camp-1")
 
@@ -165,7 +173,13 @@ def test_evaluate_milestone_approved_releases_tranche_and_advances(
 
     direct_vm.sender = direct_bob
     contract.submit_deliverable(
-        "camp-1", 0, "Architecture spec completed.", ["https://github.com/org/proto"]
+        "camp-1", 0, "Architecture spec and prototype completed.", ["https://github.com/org/proto"]
+    )
+
+    # Mock web fetch
+    direct_vm.mock_web(
+        r".*",
+        {"status": 200, "body": "Repository commit 7a8b9c: All 45 tests passing. Architecture doc included."},
     )
 
     # Mock AI LLM approval
@@ -186,7 +200,6 @@ def test_evaluate_milestone_approved_releases_tranche_and_advances(
     assert m0["evaluation_notes"] == "Deliverable satisfies architectural prototype criteria."
 
     camp = contract.get_campaign("camp-1")
-    # 25% of 10 ETH = 2.5 ETH
     assert camp["total_released"] == 2_500_000_000_000_000_000
     assert camp["current_milestone_index"] == 1
     assert contract.get_credits(direct_bob) == 2_500_000_000_000_000_000
@@ -228,6 +241,39 @@ def test_evaluate_milestone_rejected_allows_resubmission(direct_vm, direct_deplo
     assert contract.get_milestone("camp-1", 0)["status"] == "submitted"
 
 
+def test_campaign_updates_and_backer_notes(
+    direct_vm, direct_deploy, direct_alice, direct_bob, direct_charlie
+):
+    """Creator posts progress updates; active backer posts endorsement notes."""
+    contract = _deploy(direct_vm, direct_deploy, direct_alice)
+    _create_sample_campaign(direct_vm, contract, direct_alice, direct_bob, "camp-1")
+
+    # Charlie backs the campaign
+    direct_vm.sender = direct_charlie
+    direct_vm.value = 5_000_000_000_000_000_000
+    contract.fund_campaign("camp-1")
+
+    # Creator posts update
+    direct_vm.sender = direct_alice
+    contract.post_campaign_update("camp-1", "Development kickoff completed!")
+
+    # Active backer posts endorsement note
+    direct_vm.sender = direct_charlie
+    contract.post_backer_note("camp-1", "Excited to support this public good!")
+
+    # Non-backer trying to post backer note reverts
+    direct_vm.sender = direct_bob
+    with direct_vm.expect_revert("Only active backers may post endorsement notes"):
+        contract.post_backer_note("camp-1", "Spam note")
+
+    updates = contract.get_campaign_updates("camp-1")["updates"]
+    assert len(updates) == 2
+    assert updates[0]["update_type"] == "CREATOR_LOG"
+    assert updates[0]["text"] == "Development kickoff completed!"
+    assert updates[1]["update_type"] == "BACKER_NOTE"
+    assert updates[1]["text"] == "Excited to support this public good!"
+
+
 def test_full_lifecycle_all_milestones_completed(direct_vm, direct_deploy, direct_alice, direct_bob):
     """All 3 milestones approved sequentially -> 100% funds released and status becomes completed."""
     contract = _deploy(direct_vm, direct_deploy, direct_alice)
@@ -259,6 +305,9 @@ def test_full_lifecycle_all_milestones_completed(direct_vm, direct_deploy, direc
     assert camp["status"] == "completed"
     assert camp["total_released"] == TARGET_GOAL
     assert contract.get_credits(direct_bob) == TARGET_GOAL
+
+    metrics = contract.get_platform_metrics()
+    assert metrics["completed_campaigns"] == 1
 
 
 def test_beneficiary_claim_payout_pull_pattern(direct_vm, direct_deploy, direct_alice, direct_bob):
@@ -320,7 +369,7 @@ def test_cancel_campaign_and_pro_rata_refund(
     contract.cancel_campaign("camp-1")
     assert contract.get_campaign("camp-1")["status"] == "cancelled"
 
-    # Remaining unspent vault balance = 7.5 ETH (7,500,000,000,000,000,000 atto)
+    # Remaining unspent vault balance = 7.5 ETH
     # Alice had 60% contribution -> Alice should get 60% of 7.5 ETH = 4.5 ETH
     # Charlie had 40% contribution -> Charlie should get 40% of 7.5 ETH = 3.0 ETH
     direct_vm.sender = direct_alice
@@ -370,4 +419,3 @@ def test_cancel_campaign_access_and_state_guards(
     # Trying to claim refund on un-cancelled campaign reverts
     with direct_vm.expect_revert("Campaign is not cancelled; refunds unavailable"):
         contract.claim_pro_rata_refund("camp-1")
-

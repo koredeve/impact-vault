@@ -2,13 +2,26 @@ import { createClient, createAccount } from 'genlayer-js';
 import { studionet } from 'genlayer-js/chains';
 import { explorerAddressUrl } from './lib.js';
 
-export const CONTRACT_ADDRESS = '0xbB5D0451189E360165908567e8B9EfA209D386E6';
+export const CONTRACT_ADDRESS = '0xaa0B08C948E1106fbfc8EfeADd75173fbee802d5';
 export const EXPLORER_URL = explorerAddressUrl(CONTRACT_ADDRESS);
 
 export function makeClient(privateKey) {
   const opts = { chain: studionet };
   if (privateKey) opts.account = createAccount(privateKey);
   return createClient(opts);
+}
+
+export async function readPlatformMetrics(client) {
+  try {
+    return await client.readContract({
+      address: CONTRACT_ADDRESS,
+      functionName: 'get_platform_metrics',
+      args: [],
+    });
+  } catch (e) {
+    console.error('readPlatformMetrics failed:', e);
+    return null;
+  }
 }
 
 export async function listCampaignIds(client) {
@@ -47,6 +60,32 @@ export async function readMilestone(client, campaignId, milestoneIdx) {
     functionName: 'get_milestone',
     args: [campaignId, milestoneIdx],
   });
+}
+
+export async function readCampaignUpdates(client, campaignId) {
+  try {
+    const res = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      functionName: 'get_campaign_updates',
+      args: [campaignId],
+    });
+    return Array.isArray(res?.updates) ? res.updates : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function readCampaignBackers(client, campaignId) {
+  try {
+    const res = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      functionName: 'get_campaign_backers',
+      args: [campaignId],
+    });
+    return Array.isArray(res?.backers) ? res.backers : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function readBackerContribution(client, campaignId, backerAddr) {

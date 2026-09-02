@@ -7,6 +7,9 @@ import {
   truncateHash,
   formatAtto,
   parseEthToAtto,
+  formatTimeAgo,
+  CATEGORIES,
+  CRITERIA_TEMPLATES,
 } from './lib.js';
 
 beforeEach(() => {
@@ -49,5 +52,22 @@ describe('ImpactVault lib utilities', () => {
     const hash = '0x1234567890abcdef1234567890abcdef12345678';
     const truncated = truncateHash(hash, 6, 4);
     expect(truncated).toBe('0x1234…5678');
+  });
+
+  it('formats relative time ago', () => {
+    const now = Math.floor(Date.now() / 1000);
+    expect(formatTimeAgo(now - 10)).toBe('just now');
+    expect(formatTimeAgo(now - 300)).toBe('5m ago');
+    expect(formatTimeAgo(now - 7200)).toBe('2h ago');
+    expect(formatTimeAgo(now - 172800)).toBe('2d ago');
+  });
+
+  it('exports standard categories and criteria templates', () => {
+    expect(CATEGORIES.length).toBeGreaterThan(3);
+    expect(CATEGORIES).toContain('DeFi');
+    expect(CATEGORIES).toContain('AI / Agents');
+
+    expect(CRITERIA_TEMPLATES.length).toBeGreaterThan(1);
+    expect(CRITERIA_TEMPLATES[0].defaultBps).toBe(3000);
   });
 });

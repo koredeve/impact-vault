@@ -1,7 +1,7 @@
 import { privateKeyToAddress, generatePrivateKey } from 'viem/accounts';
 
 const KEYSTORE_KEY = 'impact_vault_keystore_v1';
-const SALT = new Uint8Array([73, 109, 112, 97, 99, 116, 86, 97, 117, 108, 116, 83, 97, 108, 116, 49]); // "ImpactVaultSalt1"
+const SALT = new Uint8Array([73, 109, 112, 97, 99, 116, 86, 97, 117, 108, 116, 83, 97, 108, 116, 50]); // "ImpactVaultSalt2"
 
 async function deriveKey(password) {
   const enc = new TextEncoder();
@@ -61,11 +61,14 @@ export async function loadKeystore(password) {
 }
 
 export function hasSavedKeystore() {
+  if (typeof localStorage === 'undefined') return false;
   return Boolean(localStorage.getItem(KEYSTORE_KEY));
 }
 
 export function clearSavedKeystore() {
-  localStorage.removeItem(KEYSTORE_KEY);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(KEYSTORE_KEY);
+  }
 }
 
 export function generateNewPrivateKey() {
@@ -95,6 +98,48 @@ export function parseEthToAtto(eth) {
   if (isNaN(val) || val <= 0) return 0n;
   return BigInt(Math.floor(val * 1e18));
 }
+
+export function formatTimeAgo(timestamp) {
+  if (!timestamp) return '';
+  const ts = Number(timestamp);
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - ts;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+export const CATEGORIES = [
+  'All Categories',
+  'DeFi',
+  'AI / Agents',
+  'Infrastructure',
+  'Public Goods',
+  'Security & Audits',
+  'Developer Tooling',
+];
+
+export const CRITERIA_TEMPLATES = [
+  {
+    name: 'Open Source Code & Prototype',
+    title: 'Milestone 1: Prototype & Test Coverage',
+    criteria: 'Public GitHub repository with functional code implementation, architecture docs, and automated unit test suite achieving > 85% branch coverage.',
+    defaultBps: 3000,
+  },
+  {
+    name: 'Live StudioNet Deployment',
+    title: 'Milestone 2: Testnet Deployment & Frontend DApp',
+    criteria: 'Smart contracts deployed on GenLayer StudioNet with verified bytecode and responsive web frontend demo allowing end-user interaction.',
+    defaultBps: 3500,
+  },
+  {
+    name: 'Security Audit & Mainnet Readiness',
+    title: 'Milestone 3: Security Review & Documentation',
+    criteria: 'Comprehensive security audit report published with all high/medium severity findings resolved, accompanied by complete API reference guides.',
+    defaultBps: 3500,
+  },
+];
 
 export function explorerAddressUrl(addr) {
   return `https://explorer-studio.genlayer.com/address/${addr}`;

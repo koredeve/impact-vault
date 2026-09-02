@@ -1,20 +1,30 @@
 import React, { useState } from 'react';
-import { parseEthToAtto } from '../lib.js';
+import { parseEthToAtto, CATEGORIES, CRITERIA_TEMPLATES } from '../lib.js';
 
-export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
+export function CreateCampaignModal({ isOpen, onClose, onCreate, onOpenAssistant, busy, presetMilestones }) {
   const [cid, setCid] = useState('');
   const [beneficiary, setBeneficiary] = useState('');
+  const [category, setCategory] = useState('DeFi');
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [targetEth, setTargetEth] = useState('5.0');
   
-  const [milestones, setMilestones] = useState([
-    { title: 'Milestone 1: Prototype & Spec', criteria: 'Working prototype with unit test coverage > 80%', bps: 3000 },
-    { title: 'Milestone 2: StudioNet Testnet Protocol', criteria: 'Deploy protocol on StudioNet with interactive frontend demo', bps: 3500 },
-    { title: 'Milestone 3: Mainnet Launch & Security Audit', criteria: 'Audit report completed with all findings resolved', bps: 3500 },
-  ]);
+  const [milestones, setMilestones] = useState(
+    presetMilestones || [
+      { title: 'Milestone 1: Architecture Spec & Prototype', criteria: 'Public GitHub repo with working prototype and unit test coverage > 80%', bps: 3000 },
+      { title: 'Milestone 2: StudioNet Testnet Protocol', criteria: 'Deploy protocol on StudioNet with interactive frontend demo', bps: 3500 },
+      { title: 'Milestone 3: Mainnet Launch & Security Review', criteria: 'Security audit report completed with all findings resolved', bps: 3500 },
+    ]
+  );
 
   const [error, setError] = useState('');
+
+  // Sync if presetMilestones updated by AI assistant
+  React.useEffect(() => {
+    if (presetMilestones) {
+      setMilestones(presetMilestones);
+    }
+  }, [presetMilestones]);
 
   if (!isOpen) return null;
 
@@ -36,6 +46,13 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
     const updated = [...milestones];
     updated[idx][field] = value;
     setMilestones(updated);
+  }
+
+  function applyTemplate(tmpl) {
+    setMilestones([
+      ...milestones,
+      { title: tmpl.title, criteria: tmpl.criteria, bps: tmpl.defaultBps },
+    ]);
   }
 
   function handleSubmit(e) {
@@ -66,6 +83,7 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
       cid: cid.trim(),
       beneficiary: beneficiary.trim(),
       title: title.trim(),
+      category: category.trim(),
       desc: desc.trim(),
       targetAtto,
       titles,
@@ -77,25 +95,46 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h2>🎯 Launch New Grant Campaign</h2>
-        <p className="hint">
-          Define your grant scope, funding target, and sequential milestone acceptance criteria.
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <div>
+            <h2>🎯 Launch New Grant Vault</h2>
+            <p className="hint" style={{ margin: 0 }}>
+              Lock crowdfunding capital in sequential milestone tranches verified by AI validators.
+            </p>
+          </div>
+          <button type="button" className="ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={onOpenAssistant}>
+            ✨ AI Assistant
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Campaign Identifier (Unique Slug)</label>
-            <input
-              style={{ width: '100%' }}
-              placeholder="e.g. cross-chain-dex-grant"
-              value={cid}
-              onChange={(e) => setCid(e.target.value)}
-              required
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Unique Identifier (Slug)</label>
+              <input
+                style={{ width: '100%' }}
+                placeholder="e.g. cross-chain-dex-grant"
+                value={cid}
+                onChange={(e) => setCid(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Category</label>
+              <select
+                style={{ width: '100%' }}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                {CATEGORIES.filter((c) => c !== 'All Categories').map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Campaign Title</label>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Grant Title</label>
             <input
               style={{ width: '100%' }}
               placeholder="e.g. Next-Gen Cross-Chain Liquidity Hub"
@@ -105,47 +144,64 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
             />
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Beneficiary Address (Payout Recipient)</label>
-            <input
-              style={{ width: '100%' }}
-              className="mono"
-              placeholder="0x..."
-              value={beneficiary}
-              onChange={(e) => setBeneficiary(e.target.value)}
-              required
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Beneficiary Address (Payout Recipient)</label>
+              <input
+                style={{ width: '100%' }}
+                className="mono"
+                placeholder="0x..."
+                value={beneficiary}
+                onChange={(e) => setBeneficiary(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Target Goal (GEN)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                style={{ width: '100%' }}
+                value={targetEth}
+                onChange={(e) => setTargetEth(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Description</label>
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Project Narrative & Impact Scope</label>
             <textarea
-              placeholder="Describe the grant deliverables, team credentials, and public benefit..."
+              placeholder="Describe the grant deliverables, technical architecture, and ecosystem public goods value..."
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
               required
             />
           </div>
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>Funding Target (GEN)</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              style={{ width: '100%' }}
-              value={targetEth}
-              onChange={(e) => setTargetEth(e.target.value)}
-              required
-            />
-          </div>
-
-          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h3 style={{ margin: 0, fontSize: 15 }}>Milestones ({milestones.length})</h3>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>Milestone Roadmap ({milestones.length})</h3>
               <div style={{ fontSize: 13, fontWeight: 700, color: totalBps === 10000 ? 'var(--ok)' : 'var(--warn)' }}>
-                Total Allocation: {totalBps / 100}% / 100%
+                Allocation: {totalBps / 100}% / 100% {totalBps === 10000 ? '✓' : '⚠️ Must equal 100%'}
               </div>
+            </div>
+
+            {/* Quick Template Chips */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>+ Add Template:</span>
+              {CRITERIA_TEMPLATES.map((tmpl, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className="ghost"
+                  style={{ fontSize: 11, padding: '2px 8px' }}
+                  onClick={() => applyTemplate(tmpl)}
+                >
+                  + {tmpl.name}
+                </button>
+              ))}
             </div>
 
             {milestones.map((m, idx) => (
@@ -166,7 +222,7 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
                       onChange={(e) => updateMilestone(idx, 'bps', parseInt(e.target.value) || 0)}
                       required
                     />
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({(m.bps / 100).toFixed(0)}%)</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 35 }}>({(m.bps / 100).toFixed(0)}%)</span>
                   </div>
                   {milestones.length > 1 && (
                     <button type="button" className="ghost" style={{ padding: '0 8px', color: 'var(--danger)' }} onClick={() => removeMilestone(idx)}>
@@ -175,8 +231,8 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
                   )}
                 </div>
                 <textarea
-                  style={{ minHeight: 50, fontSize: 13 }}
-                  placeholder="Objective Acceptance Criteria (What must be verified for release?)"
+                  style={{ minHeight: 45, fontSize: 13 }}
+                  placeholder="Objective Acceptance Criteria (Evaluated by GenLayer AI validators)"
                   value={m.criteria}
                   onChange={(e) => updateMilestone(idx, 'criteria', e.target.value)}
                   required
@@ -185,7 +241,7 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
             ))}
 
             <button type="button" className="ghost" style={{ width: '100%', fontSize: 13 }} onClick={addMilestone}>
-              + Add Milestone
+              + Add Custom Milestone
             </button>
           </div>
 
@@ -196,7 +252,7 @@ export function CreateCampaignModal({ isOpen, onClose, onCreate, busy }) {
               Cancel
             </button>
             <button type="submit" disabled={busy || totalBps !== 10000}>
-              {busy ? 'Launching Campaign…' : '🚀 Launch Campaign'}
+              {busy ? 'Deploying to StudioNet…' : '🚀 Launch Grant Vault'}
             </button>
           </div>
         </form>

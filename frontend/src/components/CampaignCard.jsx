@@ -4,6 +4,7 @@ import { formatAtto, truncateHash, parseEthToAtto } from '../lib.js';
 export function CampaignCard({
   campaign,
   me,
+  onSelect,
   onFund,
   onSubmitDeliverable,
   onEvaluateMilestone,
@@ -12,7 +13,6 @@ export function CampaignCard({
   busy,
 }) {
   const [fundAmount, setFundAmount] = useState('1.0');
-  const [expanded, setExpanded] = useState(false);
 
   const isCreator = me && campaign.creator?.toLowerCase() === me.toLowerCase();
   const isBeneficiary = me && campaign.beneficiary?.toLowerCase() === me.toLowerCase();
@@ -28,7 +28,7 @@ export function CampaignCard({
       case 'funding':
         return <span className="pill warn">Funding</span>;
       case 'active':
-        return <span className="pill cyan">Active Execution</span>;
+        return <span className="pill cyan">Active</span>;
       case 'completed':
         return <span className="pill ok">✓ Completed</span>;
       case 'cancelled':
@@ -43,7 +43,7 @@ export function CampaignCard({
       case 'pending':
         return <span className="pill">Pending</span>;
       case 'submitted':
-        return <span className="pill cyan">⚡ Review Ready</span>;
+        return <span className="pill cyan">⚡ Review</span>;
       case 'approved':
         return <span className="pill ok">✓ Approved</span>;
       case 'rejected':
@@ -56,15 +56,24 @@ export function CampaignCard({
   return (
     <div className="campaign-card">
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
           <div>
+            <span className="pill" style={{ fontSize: 10, padding: '2px 7px', color: 'var(--accent-hover)', marginRight: 6 }}>
+              {campaign.category || 'General'}
+            </span>
             <span className="tag" style={{ marginRight: 6 }}>{campaign.id}</span>
-            <span style={{ fontSize: 16, fontWeight: 700 }}>{campaign.title}</span>
           </div>
           {statusPill(campaign.status)}
         </div>
 
-        <p className="hint" style={{ marginBottom: 12, fontSize: 13, maxHeight: 60, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <h3
+          style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 700, cursor: 'pointer' }}
+          onClick={() => onSelect(campaign)}
+        >
+          {campaign.title}
+        </h3>
+
+        <p className="hint" style={{ marginBottom: 12, fontSize: 13, maxHeight: 42, overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {campaign.description}
         </p>
 
@@ -80,7 +89,7 @@ export function CampaignCard({
           </div>
         </div>
 
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
           <span>Beneficiary: <strong className="mono">{truncateHash(campaign.beneficiary, 6, 4)}</strong></span>
           <span>Milestones: <strong>{Number(campaign.current_milestone_index)} / {Number(campaign.total_milestones)}</strong></span>
         </div>
@@ -93,55 +102,23 @@ export function CampaignCard({
               </span>
               {milestoneStatusPill(currentM.status)}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', maxHeight: 36, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {currentM.criteria}
             </div>
           </div>
         )}
-
-        {expanded && campaign.milestones && (
-          <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-            <h4 style={{ margin: '0 0 8px', fontSize: 13 }}>Milestone Roadmap:</h4>
-            {campaign.milestones.map((m, idx) => (
-              <div key={idx} style={{ padding: '6px 8px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 6, marginBottom: 6, fontSize: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <strong>#{idx + 1} {m.title} ({(Number(m.bps) / 100).toFixed(0)}%)</strong>
-                  {milestoneStatusPill(m.status)}
-                </div>
-                <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{m.criteria}</div>
-                {m.evaluation_notes && (
-                  <div style={{ color: 'var(--ok)', marginTop: 4, fontStyle: 'italic' }}>
-                    AI Consensus: "{m.evaluation_notes}"
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
-      <div style={{ marginTop: 14 }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
           <button
             type="button"
             className="ghost"
-            style={{ fontSize: 11, padding: '4px 8px' }}
-            onClick={() => setExpanded(!expanded)}
+            style={{ flex: 1, fontSize: 12, padding: '6px 10px' }}
+            onClick={() => onSelect(campaign)}
           >
-            {expanded ? '▲ Hide Milestones' : '▼ View All Milestones'}
+            🔍 View Full Vault & Roadmap
           </button>
-
-          {isCreator && (campaign.status === 'funding' || campaign.status === 'active') && (
-            <button
-              type="button"
-              className="ghost"
-              style={{ fontSize: 11, padding: '4px 8px', color: 'var(--danger)' }}
-              onClick={() => onCancel(campaign.id)}
-              disabled={Boolean(busy)}
-            >
-              Cancel Campaign
-            </button>
-          )}
         </div>
 
         {campaign.status === 'funding' && (
@@ -150,7 +127,7 @@ export function CampaignCard({
               type="number"
               step="0.1"
               min="0.1"
-              style={{ minWidth: 90, padding: '6px 10px', fontSize: 13 }}
+              style={{ minWidth: 80, padding: '6px 10px', fontSize: 13 }}
               value={fundAmount}
               onChange={(e) => setFundAmount(e.target.value)}
             />
@@ -159,7 +136,7 @@ export function CampaignCard({
               onClick={() => onFund(campaign.id, parseEthToAtto(fundAmount))}
               disabled={Boolean(busy) || !me}
             >
-              {busy === `fund_${campaign.id}` ? 'Funding…' : '💳 Back Project'}
+              {busy === `fund_${campaign.id}` ? 'Funding…' : '💳 Back Grant'}
             </button>
           </div>
         )}
@@ -168,7 +145,7 @@ export function CampaignCard({
           <div className="row">
             {(isBeneficiary || isCreator) && (currentM.status === 'pending' || currentM.status === 'rejected') && (
               <button
-                style={{ flex: 1, padding: '8px 12px', fontSize: 12 }}
+                style={{ flex: 1, padding: '7px 12px', fontSize: 12 }}
                 onClick={() => onSubmitDeliverable(campaign, Number(campaign.current_milestone_index), currentM)}
                 disabled={Boolean(busy)}
               >
@@ -179,11 +156,11 @@ export function CampaignCard({
             {currentM.status === 'submitted' && (
               <button
                 className="success"
-                style={{ flex: 1, padding: '8px 12px', fontSize: 12 }}
+                style={{ flex: 1, padding: '7px 12px', fontSize: 12 }}
                 onClick={() => onEvaluateMilestone(campaign.id, Number(campaign.current_milestone_index))}
                 disabled={Boolean(busy)}
               >
-                {busy === `eval_${campaign.id}` ? 'Evaluating in AI Consensus…' : '⚡ Run AI Consensus'}
+                {busy === `eval_${campaign.id}` ? 'Evaluating…' : '⚡ Run AI Consensus'}
               </button>
             )}
           </div>
@@ -192,7 +169,7 @@ export function CampaignCard({
         {campaign.status === 'cancelled' && (
           <button
             className="ghost"
-            style={{ width: '100%', padding: '8px 12px', fontSize: 12 }}
+            style={{ width: '100%', padding: '7px 12px', fontSize: 12 }}
             onClick={() => onClaimRefund(campaign.id)}
             disabled={Boolean(busy) || !me}
           >

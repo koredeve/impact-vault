@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   makeClient,
+  readPlatformMetrics,
   listCampaignIds,
   readCampaign,
   readMilestonesCount,
   readMilestone,
+  readCampaignUpdates,
+  readCampaignBackers,
   readCredits,
   writeAndWait,
   CONTRACT_ADDRESS,
@@ -12,29 +15,46 @@ import {
 } from './genlayer.js';
 import { WalletCard } from './components/WalletCard.jsx';
 import { CampaignCard } from './components/CampaignCard.jsx';
+import { CampaignDetailModal } from './components/CampaignDetailModal.jsx';
 import { CreateCampaignModal } from './components/CreateCampaignModal.jsx';
+import { CriteriaAssistantModal } from './components/CriteriaAssistantModal.jsx';
 import { SubmitDeliverableModal } from './components/SubmitDeliverableModal.jsx';
-import { truncateHash, formatAtto, explorerTxUrl } from './lib.js';
+import { truncateHash, formatAtto, explorerTxUrl, CATEGORIES } from './lib.js';
 
 export function App() {
   const [client, setClient] = useState(() => makeClient(null));
   const [me, setMe] = useState(null);
+  const [walletType, setWalletType] = useState(null); // 'keystore' or 'extension'
   const [credits, setCredits] = useState(0n);
+  const [metrics, setMetrics] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [tx, setTx] = useState(null);
-  const [activeTab, setActiveTab] = useState('explore');
+
+  // Filters & State
+  const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'my'
+  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'funding', 'active', 'completed', 'cancelled'
 
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [assistantModalOpen, setAssistantModalOpen] = useState(false);
+  const [presetMilestones, setPresetMilestones] = useState(null);
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [deliverableModalData, setDeliverableModalData] = useState(null);
 
   async function refresh() {
     setLoading(true);
     setError('');
     try {
+      // Platform metrics
+      const platMetrics = await readPlatformMetrics(client);
+      setMetrics(platMetrics);
+
+      // Campaign list
       const ids = await listCampaignIds(client);
       const items = [];
       for (const id of ids) {
@@ -49,7 +69,15 @@ export function App() {
               console.error(`Failed to read milestone ${i} for ${id}:`, err);
             }
           }
-          items.push({ id, ...c, milestones });
+          const updates = await readCampaignUpdates(client, id);
+          const backers = await readCampaignBackers(client, id);
+          const campObj = { id, ...c, milestones, updates, backers };
+          items.push(campObj);
+
+          // Update selected campaign if currently open
+          if (selectedCampaign && selectedCampaign.id === id) {
+            setSelectedCampaign(campObj);
+          }
         } catch (err) {
           console.error(`Failed to read campaign ${id}:`, err);
         }
@@ -67,7 +95,7 @@ export function App() {
         setCredits(0n);
       }
     } catch (e) {
-      setError('Failed to refresh campaigns: ' + (e?.message ?? String(e)));
+      setError('Failed to refresh data: ' + (e?.message ?? String(e)));
     } finally {
       setLoading(false);
     }
@@ -85,13 +113,14 @@ export function App() {
         data.cid,
         data.beneficiary,
         data.title,
+        data.category,
         data.desc,
         data.targetAtto,
         data.titles,
         data.criteria,
         data.bpsArray,
       ]);
-      setTx({ label: `Grant campaign "${data.title}" successfully created!`, hash });
+      setTx({ label: `Grant vault "${data.title}" successfully launched on StudioNet!`, hash });
       setCreateModalOpen(false);
       await refresh();
     } catch (e) {
@@ -110,7 +139,7 @@ export function App() {
     setError('');
     try {
       const hash = await writeAndWait(client, 'fund_campaign', [campaignId], amountAtto);
-      setTx({ label: `Successfully contributed to campaign #${campaignId}!`, hash });
+      setTx({ label: `Successfully contributed to grant vault #${campaignId}!`, hash });
       await refresh();
     } catch (e) {
       setError('Funding failed: ' + (e?.message ?? String(e)));
@@ -143,7 +172,7 @@ export function App() {
     setBusy(`eval_${campaignId}`);
     setError('');
     setTx({
-      label: `AI Validators are evaluating Milestone #${milestoneIdx + 1} against acceptance criteria…`,
+      label: `GenLayer AI Validators are fetching evidence & evaluating Milestone #${milestoneIdx + 1}…`,
       hash: null,
     });
     try {
@@ -157,8 +186,36 @@ export function App() {
     }
   }
 
+  async function handlePostUpdate(campaignId, text) {
+    setBusy(`update_${campaignId}`);
+    setError('');
+    try {
+      const hash = await writeAndWait(client, 'post_campaign_update', [campaignId, text]);
+      setTx({ label: 'Creator development log published on-chain!', hash });
+      await refresh();
+    } catch (e) {
+      setError('Post update failed: ' + (e?.message ?? String(e)));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function handlePostNote(campaignId, text) {
+    setBusy(`note_${campaignId}`);
+    setError('');
+    try {
+      const hash = await writeAndWait(client, 'post_backer_note', [campaignId, text]);
+      setTx({ label: 'Backer endorsement note published on-chain!', hash });
+      await refresh();
+    } catch (e) {
+      setError('Post note failed: ' + (e?.message ?? String(e)));
+    } finally {
+      setBusy('');
+    }
+  }
+
   async function handleCancelCampaign(campaignId) {
-    if (!confirm('Are you sure you want to cancel this campaign? Backers will be able to claim pro-rata refunds.')) return;
+    if (!confirm('Are you sure you want to cancel this grant? Backers will be able to claim pro-rata refunds.')) return;
     setBusy(`cancel_${campaignId}`);
     setError('');
     try {
@@ -177,7 +234,7 @@ export function App() {
     setError('');
     try {
       const hash = await writeAndWait(client, 'claim_payout', []);
-      setTx({ label: 'Payout credits successfully claimed to your wallet!', hash });
+      setTx({ label: 'Payout credits successfully withdrawn to your wallet!', hash });
       await refresh();
     } catch (e) {
       setError('Claim payout failed: ' + (e?.message ?? String(e)));
@@ -191,7 +248,7 @@ export function App() {
     setError('');
     try {
       const hash = await writeAndWait(client, 'claim_pro_rata_refund', [campaignId]);
-      setTx({ label: `Pro-rata refund for #${campaignId} claimed to your wallet!`, hash });
+      setTx({ label: `Pro-rata refund for #${campaignId} withdrawn to your wallet!`, hash });
       await refresh();
     } catch (e) {
       setError('Claim refund failed: ' + (e?.message ?? String(e)));
@@ -199,6 +256,24 @@ export function App() {
       setBusy('');
     }
   }
+
+  // Filtered Campaigns
+  const filteredCampaigns = campaigns.filter((c) => {
+    if (selectedCategory !== 'All Categories' && c.category !== selectedCategory) {
+      return false;
+    }
+    if (statusFilter !== 'all' && c.status !== statusFilter) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = c.title?.toLowerCase().includes(q);
+      const matchDesc = c.description?.toLowerCase().includes(q);
+      const matchId = c.id?.toLowerCase().includes(q);
+      if (!matchTitle && !matchDesc && !matchId) return false;
+    }
+    return true;
+  });
 
   const myCampaigns = campaigns.filter(
     (c) => me && (c.creator?.toLowerCase() === me.toLowerCase() || c.beneficiary?.toLowerCase() === me.toLowerCase())
@@ -212,8 +287,8 @@ export function App() {
           <div>
             <h1>ImpactVault</h1>
             <p className="sub">
-              Milestone-gated Web3 grant & crowdfunding protocol on GenLayer. Capital is locked in tranches
-              and trustlessly released only when AI-validators verify that off-chain deliverables meet immutable criteria.
+              Milestone-gated Web3 grant & crowdfunding protocol on GenLayer. Capital is locked in sequential
+              tranches and trustlessly released only when AI-validators verify that off-chain deliverables satisfy immutable criteria.
             </p>
           </div>
         </div>
@@ -222,21 +297,50 @@ export function App() {
           <a href={EXPLORER_URL} target="_blank" rel="noreferrer">
             {truncateHash(CONTRACT_ADDRESS, 10, 8)}
           </a>{' '}
-          · StudioNet (Gasless Consensus)
+          · StudioNet (Gasless AI Consensus)
         </p>
+
+        {metrics && (
+          <div className="metrics-banner">
+            <div className="metric-box">
+              <div className="metric-label">Total Vault TVL</div>
+              <div className="metric-val" style={{ color: 'var(--cyan)' }}>{formatAtto(metrics.tvl_atto)} GEN</div>
+            </div>
+            <div className="metric-box">
+              <div className="metric-label">Total Disbursed</div>
+              <div className="metric-val" style={{ color: 'var(--ok)' }}>{formatAtto(metrics.total_released_atto)} GEN</div>
+            </div>
+            <div className="metric-box">
+              <div className="metric-label">Active Grant Vaults</div>
+              <div className="metric-val">{Number(metrics.active_campaigns)}</div>
+            </div>
+            <div className="metric-box">
+              <div className="metric-label">Completed Projects</div>
+              <div className="metric-val" style={{ color: 'var(--accent-hover)' }}>{Number(metrics.completed_campaigns)}</div>
+            </div>
+          </div>
+        )}
       </header>
 
       <section className="card">
-        <h2>Wallet Connection</h2>
+        <h2>Wallet Connection & Faucet</h2>
         <WalletCard
           me={me}
+          walletType={walletType}
           onUnlock={(pk, address) => {
             setClient(makeClient(pk));
             setMe(address);
+            setWalletType('keystore');
+          }}
+          onConnectExtension={(address) => {
+            setClient(makeClient(null));
+            setMe(address);
+            setWalletType('extension');
           }}
           onLock={() => {
             setClient(makeClient(null));
             setMe(null);
+            setWalletType(null);
           }}
         />
       </section>
@@ -244,7 +348,7 @@ export function App() {
       {credits > 0n && (
         <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
           <div>
-            <strong>💰 Unclaimed Payout Credits Available:</strong> {formatAtto(credits)} GEN
+            <strong>💰 Unclaimed Beneficiary Payout Available:</strong> {formatAtto(credits)} GEN
           </div>
           <button className="success" style={{ padding: '6px 14px', fontSize: 13 }} onClick={handleClaimPayout} disabled={Boolean(busy)}>
             {busy === 'claim_payout' ? 'Claiming…' : 'Withdraw to Wallet'}
@@ -278,38 +382,81 @@ export function App() {
           </button>
           {me && (
             <button className={`tab-btn ${activeTab === 'my' ? 'active' : ''}`} onClick={() => setActiveTab('my')}>
-              💼 My Campaigns ({myCampaigns.length})
+              💼 My Vaults ({myCampaigns.length})
             </button>
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="ghost" style={{ fontSize: 13 }} onClick={refresh} disabled={loading}>
             {loading ? 'Refreshing…' : '↻ Refresh'}
           </button>
+          <button className="ghost" style={{ fontSize: 13 }} onClick={() => setAssistantModalOpen(true)}>
+            ✨ Criteria Assistant
+          </button>
           <button onClick={() => setCreateModalOpen(true)} disabled={!me}>
-            + Launch Campaign
+            + Launch Grant Vault
           </button>
         </div>
       </div>
 
+      {activeTab === 'explore' && (
+        <div>
+          {/* Category Filter Chips */}
+          <div className="category-chips">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                className={`chip ${selectedCategory === cat ? 'active' : ''}`}
+                onClick={() => setSelectedCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Search & Status Bar */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <input
+              placeholder="Search grant vaults by name, keyword, or identifier..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ flex: 2 }}
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ minWidth: 150 }}
+            >
+              <option value="all">All States</option>
+              <option value="funding">Funding State</option>
+              <option value="active">Active Execution</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="skeleton" style={{ marginTop: 16 }} />
       ) : activeTab === 'explore' ? (
-        campaigns.length === 0 ? (
+        filteredCampaigns.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <p className="hint">No grant vaults registered yet on this deployment.</p>
+            <p className="hint">No grant vaults match your selected category and filters.</p>
             <button onClick={() => setCreateModalOpen(true)} disabled={!me} style={{ marginTop: 8 }}>
-              🚀 Launch First Campaign
+              🚀 Launch First Grant Vault
             </button>
           </div>
         ) : (
           <div className="campaign-grid">
-            {campaigns.map((camp) => (
+            {filteredCampaigns.map((camp) => (
               <CampaignCard
                 key={camp.id}
                 campaign={camp}
                 me={me}
+                onSelect={(c) => setSelectedCampaign(c)}
                 onFund={handleFundCampaign}
                 onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
                 onEvaluateMilestone={handleEvaluateMilestone}
@@ -323,7 +470,10 @@ export function App() {
       ) : (
         myCampaigns.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <p className="hint">You have not created or been assigned as beneficiary for any campaigns.</p>
+            <p className="hint">You have not created or backed any grant vaults yet.</p>
+            <button onClick={() => setCreateModalOpen(true)} disabled={!me} style={{ marginTop: 8 }}>
+              🚀 Launch Grant Vault
+            </button>
           </div>
         ) : (
           <div className="campaign-grid">
@@ -332,6 +482,7 @@ export function App() {
                 key={camp.id}
                 campaign={camp}
                 me={me}
+                onSelect={(c) => setSelectedCampaign(c)}
                 onFund={handleFundCampaign}
                 onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
                 onEvaluateMilestone={handleEvaluateMilestone}
@@ -344,13 +495,46 @@ export function App() {
         )
       )}
 
+      {/* Deep Drill-Down Campaign Detail Modal */}
+      <CampaignDetailModal
+        isOpen={Boolean(selectedCampaign)}
+        onClose={() => setSelectedCampaign(null)}
+        campaign={selectedCampaign}
+        me={me}
+        onFund={handleFundCampaign}
+        onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
+        onEvaluateMilestone={handleEvaluateMilestone}
+        onCancel={handleCancelCampaign}
+        onClaimRefund={handleClaimRefund}
+        onPostUpdate={handlePostUpdate}
+        onPostNote={handlePostNote}
+        busy={busy}
+      />
+
+      {/* Creation Wizard */}
       <CreateCampaignModal
         isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
+        onClose={() => {
+          setCreateModalOpen(false);
+          setPresetMilestones(null);
+        }}
         onCreate={handleCreateCampaign}
+        onOpenAssistant={() => setAssistantModalOpen(true)}
+        presetMilestones={presetMilestones}
         busy={busy === 'create'}
       />
 
+      {/* AI Criteria Assistant */}
+      <CriteriaAssistantModal
+        isOpen={assistantModalOpen}
+        onClose={() => setAssistantModalOpen(false)}
+        onApplyCriteria={(milestones) => {
+          setPresetMilestones(milestones);
+          setCreateModalOpen(true);
+        }}
+      />
+
+      {/* Milestone Deliverable Submission */}
       <SubmitDeliverableModal
         isOpen={Boolean(deliverableModalData)}
         onClose={() => setDeliverableModalData(null)}
@@ -362,7 +546,7 @@ export function App() {
       />
 
       <footer>
-        <p>Built on GenLayer StudioNet · Non-Deterministic AI Validator Consensus</p>
+        <p>Built natively for GenLayer StudioNet · Non-Deterministic AI Validator Consensus</p>
       </footer>
     </div>
   );
