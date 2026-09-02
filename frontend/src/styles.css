@@ -415,12 +415,19 @@ button.success:hover:not(:disabled) {
   animation: fadeIn 0.3s ease;
 }
 
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 14px;
   margin-top: 8px;
+  min-width: 460px;
 }
 
 th, td {
@@ -541,3 +548,89 @@ footer {
   border-top: 1px solid var(--border);
   padding-top: 24px;
 }
+
+/* ==============================================================================
+   RESPONSIVE MEDIA QUERIES (MOBILE, TABLET, TOUCH DEVICES)
+   ============================================================================== */
+
+@media (max-width: 768px) {
+  .wrap {
+    padding: 20px 14px 60px;
+  }
+
+  header h1 {
+    font-size: 26px;
+  }
+
+  .logo {
+    font-size: 34px;
+  }
+
+  .metrics-banner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .metric-box {
+    padding: 10px 12px;
+  }
+
+  .metric-val {
+    font-size: 17px;
+  }
+
+  .campaign-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-backdrop {
+    padding: 10px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    padding: 18px 14px;
+    max-height: 94vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  input, select, textarea {
+    font-size: 16px; /* Prevents auto-zoom on iOS */
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .row input, .row button {
+    width: 100%;
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  header h1 {
+    font-size: 22px;
+  }
+
+  .metrics-banner {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .card {
+    padding: 16px 12px;
+  }
+
+  .tab-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
+

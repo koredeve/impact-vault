@@ -376,33 +376,35 @@ export function CampaignDetailModal({
             {campaign.backers?.length === 0 ? (
               <p className="hint" style={{ textAlign: 'center', padding: '20px 0' }}>No backer contributions recorded yet.</p>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Backer Address</th>
-                    <th>Contribution (GEN)</th>
-                    <th>Pool Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {campaign.backers?.map((b, bidx) => {
-                    const share = campaign.total_funded > 0n
-                      ? (Number(BigInt(b.contribution) * 10000n / BigInt(campaign.total_funded)) / 100).toFixed(2)
-                      : '0.00';
-                    return (
-                      <tr key={bidx}>
-                        <td className="mono">
-                          <a href={explorerAddressUrl(b.address)} target="_blank" rel="noreferrer">
-                            {truncateHash(b.address, 10, 8)}
-                          </a>
-                        </td>
-                        <td style={{ fontWeight: 700, color: 'var(--cyan)' }}>{formatAtto(b.contribution)} GEN</td>
-                        <td>{share}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Backer Address</th>
+                      <th>Contribution (GEN)</th>
+                      <th>Pool Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campaign.backers?.map((b, bidx) => {
+                      const share = campaign.total_funded > 0n
+                        ? (Number(BigInt(b.contribution) * 10000n / BigInt(campaign.total_funded)) / 100).toFixed(2)
+                        : '0.00';
+                      return (
+                        <tr key={bidx}>
+                          <td className="mono">
+                            <a href={explorerAddressUrl(b.address)} target="_blank" rel="noreferrer">
+                              {truncateHash(b.address, 10, 8)}
+                            </a>
+                          </td>
+                          <td style={{ fontWeight: 700, color: 'var(--cyan)' }}>{formatAtto(b.contribution)} GEN</td>
+                          <td>{share}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}
