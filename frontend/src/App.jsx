@@ -43,7 +43,7 @@ export function App() {
   const [assistantModalOpen, setAssistantModalOpen] = useState(false);
   const [presetMilestones, setPresetMilestones] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [deliverableModalState, setDeliverableModalState] = useState(null); // { campaignId, milestoneIdx }
+  const [deliverableModalData, setDeliverableModalData] = useState(null);
 
   useEffect(() => {
     fetchMetrics();
@@ -545,7 +545,7 @@ export function App() {
         onCancel={handleCancelCampaign}
         onClaimRefund={handleClaimRefund}
         onPostUpdate={handlePostUpdate}
-        onPostNote={handlePostNote}
+        onPostNote={handlePostBackerNote}
         busy={busy}
       />
 
