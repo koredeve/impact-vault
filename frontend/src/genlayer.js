@@ -5,7 +5,7 @@ import { explorerAddressUrl } from './lib.js';
 export const CONTRACT_ADDRESS = '0xaa0B08C948E1106fbfc8EfeADd75173fbee802d5';
 export const EXPLORER_URL = explorerAddressUrl(CONTRACT_ADDRESS);
 
-export const STUDIONET_CHAIN_ID_HEX = '0x1080'; // 4224 in hex
+export const STUDIONET_CHAIN_ID_HEX = '0xf22f'; // 61999 in hex (matches StudioNet RPC eth_chainId)
 
 export async function switchOrAddStudioNet(provider) {
   if (!provider || typeof provider.request !== 'function') return;
