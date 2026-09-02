@@ -1,112 +1,41 @@
 import React, { useState } from 'react';
-import {
-  generateNewPrivateKey,
-  addressForPrivateKey,
-  saveKeystore,
-  loadKeystore,
-  hasSavedKeystore,
-  clearSavedKeystore,
-  truncateHash,
-} from '../lib.js';
+import { truncateHash } from '../lib.js';
 import { switchOrAddStudioNet } from '../genlayer.js';
 
-export function WalletCard({ me, walletType, onConnectExtension, onUnlock, onLock }) {
-  const [hasKeystore, setHasKeystore] = useState(() => hasSavedKeystore());
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [password, setPassword] = useState('');
-  const [privateKeyInput, setPrivateKeyInput] = useState('');
+export function WalletCard({ me, onConnect, onDisconnect }) {
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [connectingExt, setConnectingExt] = useState(false);
 
-  async function handleConnectMetaMask() {
+  async function handleConnect() {
     setError('');
     if (typeof window.ethereum === 'undefined') {
-      setError('No browser wallet extension (MetaMask / Rabby) detected in your browser.');
+      setError('No browser wallet extension (MetaMask / Rabby / Coinbase Wallet) detected in window.ethereum.');
       return;
     }
-    setConnectingExt(true);
+    setConnecting(true);
     try {
       // 1. Request account access
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       if (!accounts || accounts.length === 0) {
-        setError('No account returned by browser wallet.');
+        setError('No account selected or permission denied.');
         return;
       }
       const selectedAccount = accounts[0];
 
-      // 2. Ensure network is switched to GenLayer StudioNet
+      // 2. Automatically prompt to add / switch to GenLayer StudioNet (chainId 4224 / 0x1080)
       try {
         await switchOrAddStudioNet(window.ethereum);
       } catch (netErr) {
-        console.warn('Network switch error:', netErr);
+        console.warn('StudioNet network switch warning:', netErr);
       }
 
-      // 3. Connect extension provider client
-      onConnectExtension(selectedAccount, window.ethereum);
+      // 3. Complete connection with injected provider
+      onConnect(selectedAccount, window.ethereum);
     } catch (err) {
-      setError('Connection failed: ' + (err?.message || String(err)));
+      setError('Wallet connection failed: ' + (err?.message || String(err)));
     } finally {
-      setConnectingExt(false);
-    }
-  }
-
-  function handleInstantDemo() {
-    setError('');
-    try {
-      const pk = generateNewPrivateKey();
-      const addr = addressForPrivateKey(pk);
-      onUnlock(pk, addr);
-    } catch (err) {
-      setError(err?.message || 'Failed to generate instant burner');
-    }
-  }
-
-  async function handleUnlockKeystore(e) {
-    e.preventDefault();
-    setError('');
-    try {
-      const pk = await loadKeystore(password);
-      const addr = addressForPrivateKey(pk);
-      onUnlock(pk, addr);
-      setPassword('');
-    } catch (err) {
-      setError(err?.message || 'Incorrect password for keystore');
-    }
-  }
-
-  async function handleSaveKeystore(e) {
-    e.preventDefault();
-    setError('');
-    if (!privateKeyInput) {
-      setError('Please provide or generate a private key');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    try {
-      const addr = await saveKeystore(password, privateKeyInput);
-      setHasKeystore(true);
-      onUnlock(privateKeyInput, addr);
-      setPassword('');
-      setPrivateKeyInput('');
-    } catch (err) {
-      setError(err?.message || 'Failed to encrypt and save keystore');
-    }
-  }
-
-  function handleGenerateKey() {
-    const pk = generateNewPrivateKey();
-    setPrivateKeyInput(pk);
-  }
-
-  function handleClearKeystore() {
-    if (confirm('Clear encrypted keystore from browser storage?')) {
-      clearSavedKeystore();
-      setHasKeystore(false);
-      onLock();
+      setConnecting(false);
     }
   }
 
@@ -127,7 +56,7 @@ export function WalletCard({ me, walletType, onConnectExtension, onUnlock, onLoc
                 ● Connected
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {walletType === 'extension' ? '🦊 Browser Wallet (MetaMask / Rabby)' : '⚡ StudioNet Burner'}
+                Browser Wallet (MetaMask / Rabby)
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
@@ -145,9 +74,9 @@ export function WalletCard({ me, walletType, onConnectExtension, onUnlock, onLoc
               className="ghost"
               style={{ padding: '7px 12px', fontSize: 12, borderRadius: 8, border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              💧 Faucet
+              💧 Faucet (Get Testnet GEN)
             </a>
-            <button className="ghost" style={{ padding: '7px 12px', fontSize: 12 }} onClick={onLock}>
+            <button className="ghost" style={{ padding: '7px 12px', fontSize: 12 }} onClick={onDisconnect}>
               Disconnect
             </button>
           </div>
@@ -158,87 +87,19 @@ export function WalletCard({ me, walletType, onConnectExtension, onUnlock, onLoc
 
   return (
     <div className="walletbox">
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+      <p className="hint">
+        Connect your browser extension wallet (MetaMask, Rabby, Coinbase Wallet) to interact with ImpactVault on GenLayer StudioNet:
+      </p>
+      <div style={{ marginTop: 8 }}>
         <button
           type="button"
-          onClick={handleConnectMetaMask}
-          disabled={connectingExt}
-          style={{ flex: '2 1 220px', padding: '11px 16px', fontSize: 14, fontWeight: 700 }}
+          onClick={handleConnect}
+          disabled={connecting}
+          style={{ width: '100%', padding: '12px 20px', fontSize: 15, fontWeight: 700 }}
         >
-          🦊 {connectingExt ? 'Connecting…' : 'Connect Browser Wallet (MetaMask / Rabby)'}
-        </button>
-        <button
-          type="button"
-          className="success"
-          onClick={handleInstantDemo}
-          style={{ flex: '1 1 180px', padding: '11px 16px', fontSize: 13 }}
-        >
-          ⚡ 1-Click Instant Demo Burner
+          🦊 {connecting ? 'Connecting & Switching to StudioNet…' : 'Connect Wallet (MetaMask / Rabby)'}
         </button>
       </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-        <button
-          type="button"
-          className="ghost"
-          style={{ border: 'none', padding: 0, fontSize: 12, color: 'var(--text-muted)' }}
-          onClick={() => setShowAdvanced(!showAdvanced)}
-        >
-          {showAdvanced ? '▼ Hide Key Options' : '▶ Advanced Key & Keystore Options'}
-        </button>
-      </div>
-
-      {showAdvanced && (
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-          {hasKeystore ? (
-            <form onSubmit={handleUnlockKeystore}>
-              <p className="hint">Encrypted StudioNet keystore detected in browser. Enter password to unlock:</p>
-              <div className="row">
-                <input
-                  type="password"
-                  placeholder="Keystore Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoFocus
-                />
-                <button type="submit" disabled={!password}>
-                  Unlock Keystore
-                </button>
-                <button type="button" className="ghost" style={{ color: 'var(--danger)' }} onClick={handleClearKeystore}>
-                  Clear
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleSaveKeystore}>
-              <p className="hint">Import custom private key or generate an encrypted keystore:</p>
-              <div className="row" style={{ marginBottom: 10 }}>
-                <input
-                  type="password"
-                  placeholder="Private key (0x...)"
-                  value={privateKeyInput}
-                  onChange={(e) => setPrivateKeyInput(e.target.value)}
-                />
-                <button type="button" className="ghost" onClick={handleGenerateKey}>
-                  🎲 Generate
-                </button>
-              </div>
-              <div className="row">
-                <input
-                  type="password"
-                  placeholder="Set Encryption Password (min 6 chars)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button type="submit" disabled={!privateKeyInput || password.length < 6}>
-                  Save & Connect
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-      )}
-
       {error && <div className="error" style={{ marginTop: 10 }}>{error}</div>}
     </div>
   );

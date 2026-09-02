@@ -32,9 +32,7 @@ Traditional EVM smart contracts cannot evaluate natural language deliverables or
 * **Status:** `ACCEPTED` by StudioNet validators.
 
 ### 3. Production React DApp (`frontend/`)
-* **Dual-Wallet Signing Engine:**
-  * **Browser Extensions (MetaMask / Rabby):** Seamless 1-click connection via injected `window.ethereum` provider (`makeExtensionClient`) with automatic EIP-3085 & EIP-3326 StudioNet network addition and switching (`0x1080` / `4224`). Every state-modifying write triggers a signed transaction prompt in your wallet.
-  * **StudioNet Gasless Burner & Keystore:** 1-Click instant demo burner key generation (`makeClient`) + client-side AES-GCM (PBKDF2 100k rounds) encrypted persistent keystore for gasless testing.
+* **Browser Wallet Integration (MetaMask / Rabby):** Seamless 1-click connection via injected `window.ethereum` provider (`makeExtensionClient`) with automatic EIP-3085 & EIP-3326 StudioNet network addition and switching (`0x1080` / `4224`). Every state-modifying contract write triggers a signed transaction prompt in your wallet.
 * **Deep Vault Explorer:** Search by keyword/slug, filter by domain categories, and filter by lifecycle status.
 * **Interactive Vault Detail Modal:** Milestone visual roadmap, deliverable proof links, AI consensus logs, on-chain updates, and backer ledger.
 * **Step-by-Step Campaign Wizard:** 1-click criteria templates ("Open Source Code", "StudioNet Deployment", "Security Review") + Live BPS allocation calculator.
