@@ -8,16 +8,61 @@ import {
   clearSavedKeystore,
   truncateHash,
 } from '../lib.js';
+import { switchOrAddStudioNet } from '../genlayer.js';
 
-export function WalletCard({ me, onUnlock, onLock }) {
+export function WalletCard({ me, walletType, onConnectExtension, onUnlock, onLock }) {
   const [hasKeystore, setHasKeystore] = useState(() => hasSavedKeystore());
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [password, setPassword] = useState('');
   const [privateKeyInput, setPrivateKeyInput] = useState('');
-  const [mode, setMode] = useState(hasKeystore ? 'unlock' : 'instant');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [connectingExt, setConnectingExt] = useState(false);
 
-  async function handleUnlock(e) {
+  async function handleConnectMetaMask() {
+    setError('');
+    if (typeof window.ethereum === 'undefined') {
+      setError('No browser wallet extension (MetaMask / Rabby) detected in your browser.');
+      return;
+    }
+    setConnectingExt(true);
+    try {
+      // 1. Request account access
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) {
+        setError('No account returned by browser wallet.');
+        return;
+      }
+      const selectedAccount = accounts[0];
+
+      // 2. Ensure network is switched to GenLayer StudioNet
+      try {
+        await switchOrAddStudioNet(window.ethereum);
+      } catch (netErr) {
+        console.warn('Network switch error:', netErr);
+      }
+
+      // 3. Connect extension provider client
+      onConnectExtension(selectedAccount, window.ethereum);
+    } catch (err) {
+      setError('Connection failed: ' + (err?.message || String(err)));
+    } finally {
+      setConnectingExt(false);
+    }
+  }
+
+  function handleInstantDemo() {
+    setError('');
+    try {
+      const pk = generateNewPrivateKey();
+      const addr = addressForPrivateKey(pk);
+      onUnlock(pk, addr);
+    } catch (err) {
+      setError(err?.message || 'Failed to generate instant burner');
+    }
+  }
+
+  async function handleUnlockKeystore(e) {
     e.preventDefault();
     setError('');
     try {
@@ -30,7 +75,7 @@ export function WalletCard({ me, onUnlock, onLock }) {
     }
   }
 
-  async function handleSave(e) {
+  async function handleSaveKeystore(e) {
     e.preventDefault();
     setError('');
     if (!privateKeyInput) {
@@ -52,34 +97,16 @@ export function WalletCard({ me, onUnlock, onLock }) {
     }
   }
 
-  function handleInstantDemo() {
-    setError('');
-    try {
-      const pk = generateNewPrivateKey();
-      const addr = addressForPrivateKey(pk);
-      onUnlock(pk, addr);
-    } catch (err) {
-      setError(err?.message || 'Failed to generate instant burner');
-    }
-  }
-
-  function handleGenerate() {
+  function handleGenerateKey() {
     const pk = generateNewPrivateKey();
     setPrivateKeyInput(pk);
-    setMode('create');
   }
 
-  function handleLock() {
-    onLock();
-    setPassword('');
-  }
-
-  function handleClear() {
-    if (confirm('Clear encrypted keystore from browser local storage?')) {
+  function handleClearKeystore() {
+    if (confirm('Clear encrypted keystore from browser storage?')) {
       clearSavedKeystore();
       setHasKeystore(false);
       onLock();
-      setMode('instant');
     }
   }
 
@@ -100,7 +127,7 @@ export function WalletCard({ me, onUnlock, onLock }) {
                 ● Connected
               </span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                StudioNet Gasless Burner
+                {walletType === 'extension' ? '🦊 Browser Wallet (MetaMask / Rabby)' : '⚡ StudioNet Burner'}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
@@ -120,7 +147,7 @@ export function WalletCard({ me, onUnlock, onLock }) {
             >
               💧 Faucet
             </a>
-            <button className="ghost" style={{ padding: '7px 12px', fontSize: 12 }} onClick={handleLock}>
+            <button className="ghost" style={{ padding: '7px 12px', fontSize: 12 }} onClick={onLock}>
               Disconnect
             </button>
           </div>
@@ -131,42 +158,60 @@ export function WalletCard({ me, onUnlock, onLock }) {
 
   return (
     <div className="walletbox">
-      {hasKeystore && mode === 'unlock' ? (
-        <form onSubmit={handleUnlock}>
-          <p className="hint">Encrypted StudioNet keystore detected in browser. Enter password to unlock:</p>
-          <div className="row">
-            <input
-              type="password"
-              placeholder="Keystore Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-            />
-            <button type="submit" disabled={!password}>
-              Unlock Account
-            </button>
-            <button type="button" className="ghost" onClick={() => setMode('instant')}>
-              Use Instant Burner
-            </button>
-          </div>
-        </form>
-      ) : (
-        <form onSubmit={handleSave}>
-          <p className="hint">
-            Connect to StudioNet with a gasless in-app burner wallet or password-encrypted keystore:
-          </p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={handleConnectMetaMask}
+          disabled={connectingExt}
+          style={{ flex: '2 1 220px', padding: '11px 16px', fontSize: 14, fontWeight: 700 }}
+        >
+          🦊 {connectingExt ? 'Connecting…' : 'Connect Browser Wallet (MetaMask / Rabby)'}
+        </button>
+        <button
+          type="button"
+          className="success"
+          onClick={handleInstantDemo}
+          style={{ flex: '1 1 180px', padding: '11px 16px', fontSize: 13 }}
+        >
+          ⚡ 1-Click Instant Demo Burner
+        </button>
+      </div>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <button type="button" className="success" style={{ flex: '1 1 180px', padding: '9px 14px', fontSize: 13 }} onClick={handleInstantDemo}>
-              ⚡ 1-Click Instant Demo Burner
-            </button>
-            <button type="button" className="ghost" style={{ flex: '1 1 160px', padding: '9px 14px', fontSize: 13 }} onClick={handleGenerate}>
-              🔐 Generate & Encrypt Key
-            </button>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+        <button
+          type="button"
+          className="ghost"
+          style={{ border: 'none', padding: 0, fontSize: 12, color: 'var(--text-muted)' }}
+          onClick={() => setShowAdvanced(!showAdvanced)}
+        >
+          {showAdvanced ? '▼ Hide Key Options' : '▶ Advanced Key & Keystore Options'}
+        </button>
+      </div>
 
-          {mode === 'create' && (
-            <div>
+      {showAdvanced && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          {hasKeystore ? (
+            <form onSubmit={handleUnlockKeystore}>
+              <p className="hint">Encrypted StudioNet keystore detected in browser. Enter password to unlock:</p>
+              <div className="row">
+                <input
+                  type="password"
+                  placeholder="Keystore Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoFocus
+                />
+                <button type="submit" disabled={!password}>
+                  Unlock Keystore
+                </button>
+                <button type="button" className="ghost" style={{ color: 'var(--danger)' }} onClick={handleClearKeystore}>
+                  Clear
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSaveKeystore}>
+              <p className="hint">Import custom private key or generate an encrypted keystore:</p>
               <div className="row" style={{ marginBottom: 10 }}>
                 <input
                   type="password"
@@ -174,6 +219,9 @@ export function WalletCard({ me, onUnlock, onLock }) {
                   value={privateKeyInput}
                   onChange={(e) => setPrivateKeyInput(e.target.value)}
                 />
+                <button type="button" className="ghost" onClick={handleGenerateKey}>
+                  🎲 Generate
+                </button>
               </div>
               <div className="row">
                 <input
@@ -185,20 +233,9 @@ export function WalletCard({ me, onUnlock, onLock }) {
                 <button type="submit" disabled={!privateKeyInput || password.length < 6}>
                   Save & Connect
                 </button>
-                <button type="button" className="ghost" onClick={() => setMode('instant')}>
-                  Cancel
-                </button>
               </div>
-            </div>
+            </form>
           )}
-        </form>
-      )}
-
-      {hasKeystore && (
-        <div style={{ marginTop: 12, textAlign: 'right' }}>
-          <button type="button" className="ghost" style={{ fontSize: 11, padding: '2px 6px', color: 'var(--danger)' }} onClick={handleClear}>
-            Clear stored keystore
-          </button>
         </div>
       )}
 

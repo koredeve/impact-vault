@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   makeClient,
+  makeExtensionClient,
+  switchOrAddStudioNet,
   readPlatformMetrics,
   listCampaignIds,
   readCampaign,
@@ -11,15 +13,47 @@ import {
   readCredits,
   writeAndWait,
   CONTRACT_ADDRESS,
+  STUDIONET_CHAIN_ID_HEX,
 } from './genlayer.js';
 
-describe('ImpactVault GenLayer Client & Signed Writes', () => {
-  it('instantiates client with account for signed writes', () => {
+describe('ImpactVault GenLayer Client & Dual-Signing Architecture', () => {
+  it('instantiates local account client for signed writes', () => {
     const testPk = '0x1000000000000000000000000000000000000000000000000000000000000001';
     const client = makeClient(testPk);
     expect(client).toBeDefined();
     expect(client.account).toBeDefined();
     expect(client.account.address).toMatch(/^0x[a-fA-F0-9]{40}$/);
+  });
+
+  it('instantiates browser extension provider client for signed writes', () => {
+    const mockProvider = {
+      request: vi.fn(),
+    };
+    const mockAddr = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+    const extClient = makeExtensionClient(mockAddr, mockProvider);
+    expect(extClient).toBeDefined();
+    expect(extClient.account.address.toLowerCase()).toBe(mockAddr.toLowerCase());
+  });
+
+  it('switches or adds GenLayer StudioNet network via EIP-3085 / EIP-3326', async () => {
+    const mockRequest = vi.fn().mockRejectedValueOnce({ code: 4902, message: 'Unrecognized chain' })
+      .mockResolvedValueOnce(null);
+    const mockProvider = { request: mockRequest };
+
+    await switchOrAddStudioNet(mockProvider);
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: STUDIONET_CHAIN_ID_HEX }],
+    });
+    expect(mockRequest).toHaveBeenCalledWith({
+      method: 'wallet_addEthereumChain',
+      params: [
+        expect.objectContaining({
+          chainId: STUDIONET_CHAIN_ID_HEX,
+          chainName: 'GenLayer StudioNet',
+        }),
+      ],
+    });
   });
 
   it('executes signed contract writes and waits for ACCEPTED receipt', async () => {

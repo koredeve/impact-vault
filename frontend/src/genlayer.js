@@ -5,10 +5,53 @@ import { explorerAddressUrl } from './lib.js';
 export const CONTRACT_ADDRESS = '0xaa0B08C948E1106fbfc8EfeADd75173fbee802d5';
 export const EXPLORER_URL = explorerAddressUrl(CONTRACT_ADDRESS);
 
+export const STUDIONET_CHAIN_ID_HEX = '0x1080'; // 4224 in hex
+
+export async function switchOrAddStudioNet(provider) {
+  if (!provider || typeof provider.request !== 'function') return;
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: STUDIONET_CHAIN_ID_HEX }],
+    });
+  } catch (switchError) {
+    // 4902 error code indicates the chain has not been added to MetaMask
+    if (
+      switchError.code === 4902 ||
+      switchError?.data?.originalError?.code === 4902 ||
+      switchError?.message?.includes('Unrecognized') ||
+      switchError?.message?.includes('wallet_addEthereumChain')
+    ) {
+      await provider.request({
+        method: 'wallet_addEthereumChain',
+        params: [
+          {
+            chainId: STUDIONET_CHAIN_ID_HEX,
+            chainName: 'GenLayer StudioNet',
+            nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 },
+            rpcUrls: ['https://studio.genlayer.com/api'],
+            blockExplorerUrls: ['https://explorer-studio.genlayer.com'],
+          },
+        ],
+      });
+    } else {
+      console.warn('Network switch warning:', switchError);
+    }
+  }
+}
+
 export function makeClient(privateKey) {
   const opts = { chain: studionet };
   if (privateKey) opts.account = createAccount(privateKey);
   return createClient(opts);
+}
+
+export function makeExtensionClient(address, provider = window.ethereum) {
+  return createClient({
+    chain: studionet,
+    provider: provider,
+    account: address,
+  });
 }
 
 export async function readPlatformMetrics(client) {
