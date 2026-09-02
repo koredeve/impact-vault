@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { truncateHash } from '../lib.js';
 import { switchOrAddStudioNet } from '../genlayer.js';
 
+export const FAUCET_URL = 'https://testnet-faucet.genlayer.foundation/';
+
 export function WalletCard({ me, onConnect, onDisconnect }) {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +25,7 @@ export function WalletCard({ me, onConnect, onDisconnect }) {
       }
       const selectedAccount = accounts[0];
 
-      // 2. Automatically prompt to add / switch to GenLayer StudioNet (chainId 4224 / 0x1080)
+      // 2. Automatically prompt to add / switch to GenLayer StudioNet (chainId 61999 / 0xf22f)
       try {
         await switchOrAddStudioNet(window.ethereum);
       } catch (netErr) {
@@ -68,7 +70,7 @@ export function WalletCard({ me, onConnect, onDisconnect }) {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <a
-              href="https://faucet-studio.genlayer.com"
+              href={FAUCET_URL}
               target="_blank"
               rel="noreferrer"
               className="ghost"
@@ -90,15 +92,35 @@ export function WalletCard({ me, onConnect, onDisconnect }) {
       <p className="hint">
         Connect your browser extension wallet (MetaMask, Rabby, Coinbase Wallet) to interact with ImpactVault on GenLayer StudioNet:
       </p>
-      <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
         <button
           type="button"
           onClick={handleConnect}
           disabled={connecting}
-          style={{ width: '100%', padding: '12px 20px', fontSize: 15, fontWeight: 700 }}
+          style={{ flex: '2 1 240px', padding: '12px 20px', fontSize: 15, fontWeight: 700 }}
         >
           🦊 {connecting ? 'Connecting & Switching to StudioNet…' : 'Connect Wallet (MetaMask / Rabby)'}
         </button>
+        <a
+          href={FAUCET_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="ghost"
+          style={{
+            flex: '1 1 180px',
+            padding: '12px 16px',
+            fontSize: 13,
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            textAlign: 'center',
+          }}
+        >
+          💧 Get Testnet GEN
+        </a>
       </div>
       {error && <div className="error" style={{ marginTop: 10 }}>{error}</div>}
     </div>
