@@ -1,65 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
+  generateNewPrivateKey,
+  addressForPrivateKey,
   saveKeystore,
   loadKeystore,
   hasSavedKeystore,
   clearSavedKeystore,
-  generateNewPrivateKey,
-  addressForPrivateKey,
   truncateHash,
 } from '../lib.js';
 
-export function WalletCard({ me, onUnlock, onLock, walletType, onConnectExtension }) {
+export function WalletCard({ me, walletType, onUnlock, onConnectExtension, onLock }) {
+  const [hasKeystore, setHasKeystore] = useState(() => hasSavedKeystore());
   const [password, setPassword] = useState('');
   const [privateKeyInput, setPrivateKeyInput] = useState('');
-  const [error, setError] = useState('');
-  const [mode, setMode] = useState(hasSavedKeystore() ? 'unlock' : 'import');
-  const [hasKeystore, setHasKeystore] = useState(hasSavedKeystore());
-  const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState(hasKeystore ? 'unlock' : 'import');
   const [tab, setTab] = useState('keystore'); // 'keystore' or 'extension'
-
-  useEffect(() => {
-    setHasKeystore(hasSavedKeystore());
-  }, [me]);
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   async function handleUnlock(e) {
     e.preventDefault();
     setError('');
     try {
       const pk = await loadKeystore(password);
-      if (!pk) {
-        setError('Incorrect password or invalid keystore.');
-        return;
-      }
       const addr = addressForPrivateKey(pk);
-      onUnlock(pk, addr, 'keystore');
+      onUnlock(pk, addr);
       setPassword('');
-    } catch {
-      setError('Failed to decrypt keystore. Check password.');
+    } catch (err) {
+      setError(err?.message || 'Incorrect password for keystore');
     }
   }
 
   async function handleSave(e) {
     e.preventDefault();
     setError('');
-    let pk = privateKeyInput.trim();
-    if (!pk) {
-      setError('Private key is required.');
+    if (!privateKeyInput) {
+      setError('Please provide or generate a private key');
       return;
     }
-    if (!pk.startsWith('0x')) pk = '0x' + pk;
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+      setError('Password must be at least 6 characters');
       return;
     }
     try {
-      const addr = await saveKeystore(password, pk);
-      onUnlock(pk, addr, 'keystore');
+      const addr = await saveKeystore(password, privateKeyInput);
       setHasKeystore(true);
+      onUnlock(privateKeyInput, addr);
       setPassword('');
       setPrivateKeyInput('');
     } catch (err) {
-      setError('Failed to encrypt keystore: ' + err.message);
+      setError(err?.message || 'Failed to encrypt and save keystore');
+    }
+  }
+
+  function handleInstantDemo() {
+    setError('');
+    try {
+      const pk = generateNewPrivateKey();
+      const addr = addressForPrivateKey(pk);
+      onUnlock(pk, addr);
+    } catch (err) {
+      setError(err?.message || 'Failed to generate instant burner');
     }
   }
 
@@ -111,30 +112,32 @@ export function WalletCard({ me, onUnlock, onLock, walletType, onConnectExtensio
       <div className="walletbox">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span className="pill ok" style={{ fontSize: 10, padding: '2px 8px' }}>
-                {walletType === 'extension' ? '🦊 Browser Wallet' : '🔐 StudioNet Keystore'}
+                ● Connected
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Connected</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {walletType === 'extension' ? 'Browser Extension' : 'StudioNet Burner'}
+              </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <span className="mono" style={{ fontWeight: 700, fontSize: 16 }}>{truncateHash(me, 10, 8)}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              <span className="mono" style={{ fontWeight: 700, fontSize: 15 }}>{truncateHash(me, 8, 6)}</span>
               <button className="ghost" style={{ padding: '3px 8px', fontSize: 11 }} onClick={copyAddr}>
                 {copied ? '✓ Copied' : 'Copy'}
               </button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <a
               href="https://faucet-studio.genlayer.com"
               target="_blank"
               rel="noreferrer"
               className="ghost"
-              style={{ padding: '7px 14px', fontSize: 12, borderRadius: 8, border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ padding: '7px 12px', fontSize: 12, borderRadius: 8, border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              💧 Faucet (Get Testnet GEN)
+              💧 Faucet
             </a>
-            <button className="ghost" style={{ padding: '7px 14px', fontSize: 12 }} onClick={handleLock}>
+            <button className="ghost" style={{ padding: '7px 12px', fontSize: 12 }} onClick={handleLock}>
               Disconnect
             </button>
           </div>
@@ -145,29 +148,29 @@ export function WalletCard({ me, onUnlock, onLock, walletType, onConnectExtensio
 
   return (
     <div className="walletbox">
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+      <div className="wallet-tabs" style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
         <button
           type="button"
           className={`tab-btn ${tab === 'keystore' ? 'active' : ''}`}
-          style={{ fontSize: 12, padding: '6px 12px' }}
+          style={{ fontSize: 12, padding: '6px 10px', flex: '1 1 130px', textAlign: 'center' }}
           onClick={() => setTab('keystore')}
         >
-          🔐 StudioNet Burner / Keystore (Instant & Gasless)
+          🔐 Keystore (Gasless)
         </button>
         <button
           type="button"
           className={`tab-btn ${tab === 'extension' ? 'active' : ''}`}
-          style={{ fontSize: 12, padding: '6px 12px' }}
+          style={{ fontSize: 12, padding: '6px 10px', flex: '1 1 130px', textAlign: 'center' }}
           onClick={() => setTab('extension')}
         >
-          🦊 Browser Wallet (MetaMask / Rabby)
+          🦊 Browser Wallet
         </button>
       </div>
 
       {tab === 'extension' ? (
         <div>
-          <p className="hint">Connect your browser extension wallet (MetaMask, Rabby, Coinbase Wallet) to sign transactions:</p>
-          <button type="button" onClick={connectMetaMask} style={{ marginTop: 4 }}>
+          <p className="hint">Connect your browser extension wallet (MetaMask, Rabby, Coinbase Wallet):</p>
+          <button type="button" onClick={connectMetaMask} style={{ width: '100%', marginTop: 4 }}>
             🦊 Connect Browser Extension
           </button>
         </div>
@@ -186,7 +189,7 @@ export function WalletCard({ me, onUnlock, onLock, walletType, onConnectExtensio
               Unlock Account
             </button>
             <button type="button" className="ghost" onClick={() => setMode('import')}>
-              Use Different Key
+              Use Other Key
             </button>
           </div>
         </form>
@@ -194,9 +197,19 @@ export function WalletCard({ me, onUnlock, onLock, walletType, onConnectExtensio
         <form onSubmit={handleSave}>
           <p className="hint">
             {mode === 'create'
-              ? 'New private key generated. Set a password to encrypt it in your browser:'
-              : 'Import private key or generate a burner account with 1 click:'}
+              ? 'New burner key generated. Set a password to encrypt in browser or connect instantly:'
+              : 'Choose an instant demo burner or set an encrypted password:'}
           </p>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <button type="button" className="success" style={{ flex: '1 1 160px', padding: '9px 14px', fontSize: 13 }} onClick={handleInstantDemo}>
+              ⚡ 1-Click Instant Demo Burner
+            </button>
+            <button type="button" className="ghost" style={{ flex: '1 1 140px', padding: '9px 14px', fontSize: 13 }} onClick={handleGenerate}>
+              🎲 Generate Key to Encrypt
+            </button>
+          </div>
+
           <div className="row" style={{ marginBottom: 10 }}>
             <input
               type="password"
@@ -204,9 +217,6 @@ export function WalletCard({ me, onUnlock, onLock, walletType, onConnectExtensio
               value={privateKeyInput}
               onChange={(e) => setPrivateKeyInput(e.target.value)}
             />
-            <button type="button" className="ghost" onClick={handleGenerate}>
-              🎲 Generate Burner Key
-            </button>
           </div>
           <div className="row">
             <input

@@ -375,8 +375,8 @@ export function App() {
 
       {error && <div className="error" style={{ marginTop: 16 }}>{error}</div>}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-        <div className="tabs" style={{ margin: 0, border: 'none', padding: 0 }}>
+      <div className="toolbar-wrap">
+        <div className="toolbar-tabs">
           <button className={`tab-btn ${activeTab === 'explore' ? 'active' : ''}`} onClick={() => setActiveTab('explore')}>
             🌐 Explore Grant Vaults ({campaigns.length})
           </button>
@@ -387,14 +387,14 @@ export function App() {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="ghost" style={{ fontSize: 13 }} onClick={refresh} disabled={loading}>
+        <div className="toolbar-actions">
+          <button className="ghost" style={{ fontSize: 13, flex: '1 1 auto' }} onClick={refresh} disabled={loading}>
             {loading ? 'Refreshing…' : '↻ Refresh'}
           </button>
-          <button className="ghost" style={{ fontSize: 13 }} onClick={() => setAssistantModalOpen(true)}>
+          <button className="ghost" style={{ fontSize: 13, flex: '1 1 auto' }} onClick={() => setAssistantModalOpen(true)}>
             ✨ Criteria Assistant
           </button>
-          <button onClick={() => setCreateModalOpen(true)} disabled={!me}>
+          <button style={{ flex: '1 1 auto' }} onClick={() => setCreateModalOpen(true)} disabled={!me}>
             + Launch Grant Vault
           </button>
         </div>

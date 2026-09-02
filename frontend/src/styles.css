@@ -540,6 +540,29 @@ a:hover {
   }
 }
 
+.toolbar-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 28px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 footer {
   margin-top: 48px;
   color: var(--text-muted);
@@ -577,6 +600,20 @@ footer {
 
   .metric-val {
     font-size: 17px;
+  }
+
+  .toolbar-wrap {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .toolbar-tabs, .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-tabs button, .toolbar-actions button {
+    flex: 1 1 auto;
   }
 
   .campaign-grid {
@@ -629,8 +666,8 @@ footer {
   }
 
   .tab-btn {
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 }
 
