@@ -1,44 +1,12 @@
 import React, { useState } from 'react';
 import { truncateHash } from '../lib.js';
-import { switchOrAddStudioNet } from '../genlayer.js';
+import { ConnectWalletModal } from './ConnectWalletModal.jsx';
 
 export const FAUCET_URL = 'https://testnet-faucet.genlayer.foundation/';
 
 export function WalletHeader({ me, onConnect, onDisconnect }) {
-  const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  async function handleConnect() {
-    setError('');
-    if (typeof window.ethereum === 'undefined') {
-      alert('No browser wallet extension (MetaMask, Rabby, Coinbase Wallet) detected. Please install MetaMask or Rabby.');
-      return;
-    }
-    setConnecting(true);
-    try {
-      // 1. Request account
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (!accounts || accounts.length === 0) {
-        setError('No account selected.');
-        return;
-      }
-      const selectedAccount = accounts[0];
-
-      // 2. Switch or Add StudioNet (61999 / 0xf22f)
-      try {
-        await switchOrAddStudioNet(window.ethereum);
-      } catch (netErr) {
-        console.warn('StudioNet network switch warning:', netErr);
-      }
-
-      onConnect(selectedAccount, window.ethereum);
-    } catch (err) {
-      setError('Connection failed: ' + (err?.message || String(err)));
-    } finally {
-      setConnecting(false);
-    }
-  }
 
   function copyAddr() {
     if (!me) return;
@@ -83,25 +51,27 @@ export function WalletHeader({ me, onConnect, onDisconnect }) {
       ) : (
         <button
           type="button"
-          onClick={handleConnect}
-          disabled={connecting}
+          onClick={() => setModalOpen(true)}
           style={{
             padding: '9px 18px',
             fontSize: 14,
             fontWeight: 700,
             borderRadius: 8,
             boxShadow: '0 0 15px var(--accent-glow)',
+            cursor: 'pointer',
           }}
         >
-          🦊 {connecting ? 'Connecting…' : 'Connect Wallet'}
+          🦊 Connect Wallet
         </button>
       )}
 
-      {error && (
-        <div style={{ fontSize: 12, color: 'var(--danger)', width: '100%', textAlign: 'right' }}>
-          {error}
-        </div>
-      )}
+      <ConnectWalletModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onConnectSuccess={(address, provider, signature) => {
+          onConnect(address, provider);
+        }}
+      />
     </div>
   );
 }
