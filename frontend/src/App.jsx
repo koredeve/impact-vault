@@ -8,13 +8,12 @@ import {
   readMilestonesCount,
   readMilestone,
   readCampaignUpdates,
-  readCampaignBackers,
   readCredits,
   writeAndWait,
   CONTRACT_ADDRESS,
   EXPLORER_URL,
 } from './genlayer.js';
-import { WalletCard } from './components/WalletCard.jsx';
+import { WalletHeader } from './components/WalletHeader.jsx';
 import { CampaignCard } from './components/CampaignCard.jsx';
 import { CampaignDetailModal } from './components/CampaignDetailModal.jsx';
 import { CreateCampaignModal } from './components/CreateCampaignModal.jsx';
@@ -44,227 +43,272 @@ export function App() {
   const [assistantModalOpen, setAssistantModalOpen] = useState(false);
   const [presetMilestones, setPresetMilestones] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [deliverableModalData, setDeliverableModalData] = useState(null);
+  const [deliverableModalState, setDeliverableModalState] = useState(null); // { campaignId, milestoneIdx }
 
-  async function refresh() {
+  useEffect(() => {
+    fetchMetrics();
+    fetchCampaigns();
+  }, []);
+
+  useEffect(() => {
+    if (me) {
+      fetchCredits(me);
+    } else {
+      setCredits(0n);
+    }
+  }, [me]);
+
+  async function fetchMetrics() {
+    const data = await readPlatformMetrics(client);
+    if (data) setMetrics(data);
+  }
+
+  async function fetchCredits(address) {
+    try {
+      const amt = await readCredits(client, address);
+      setCredits(amt || 0n);
+    } catch {
+      setCredits(0n);
+    }
+  }
+
+  async function fetchCampaigns() {
     setLoading(true);
     setError('');
     try {
-      // Platform metrics
-      const platMetrics = await readPlatformMetrics(client);
-      setMetrics(platMetrics);
-
-      // Campaign list
       const ids = await listCampaignIds(client);
-      const items = [];
-      for (const id of ids) {
-        try {
-          const c = await readCampaign(client, id);
-          const count = await readMilestonesCount(client, id);
-          const milestones = [];
-          for (let i = 0; i < Number(count); i++) {
-            try {
-              milestones.push(await readMilestone(client, id, BigInt(i)));
-            } catch (err) {
-              console.error(`Failed to read milestone ${i} for ${id}:`, err);
-            }
+      const list = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const data = await readCampaign(client, id);
+            return { id, ...data };
+          } catch {
+            return null;
           }
-          const updates = await readCampaignUpdates(client, id);
-          const backers = await readCampaignBackers(client, id);
-          const campObj = { id, ...c, milestones, updates, backers };
-          items.push(campObj);
-
-          // Update selected campaign if currently open
-          if (selectedCampaign && selectedCampaign.id === id) {
-            setSelectedCampaign(campObj);
-          }
-        } catch (err) {
-          console.error(`Failed to read campaign ${id}:`, err);
-        }
-      }
-      setCampaigns(items);
-
-      if (me) {
-        try {
-          const cred = await readCredits(client, me);
-          setCredits(BigInt(cred));
-        } catch {
-          setCredits(0n);
-        }
-      } else {
-        setCredits(0n);
-      }
-    } catch (e) {
-      setError('Failed to refresh data: ' + (e?.message ?? String(e)));
+        })
+      );
+      setCampaigns(list.filter(Boolean));
+    } catch (err) {
+      setError('Failed to load campaigns from StudioNet.');
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    refresh();
-  }, [me]);
-
-  async function handleCreateCampaign(data) {
+  async function handleCreateCampaign(formData) {
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
     setBusy('create');
     setError('');
+    setTx(null);
     try {
-      const hash = await writeAndWait(client, 'create_campaign', [
-        data.cid,
-        data.beneficiary,
-        data.title,
-        data.category,
-        data.desc,
-        data.targetAtto,
-        data.titles,
-        data.criteria,
-        data.bpsArray,
-      ]);
-      setTx({ label: `Grant vault "${data.title}" successfully launched on StudioNet!`, hash });
+      const hash = await writeAndWait(
+        client,
+        'create_campaign',
+        [
+          formData.id,
+          formData.title,
+          formData.description,
+          formData.category,
+          formData.beneficiary,
+          formData.targetAmountAtto,
+          formData.milestoneBps,
+          formData.milestoneCriteria,
+        ],
+        0n
+      );
+      setTx({ hash, label: `Created grant vault "${formData.title}"` });
       setCreateModalOpen(false);
-      await refresh();
-    } catch (e) {
-      setError('Create campaign failed: ' + (e?.message ?? String(e)));
+      await fetchCampaigns();
+      await fetchMetrics();
+    } catch (err) {
+      setError(err?.message || 'Failed to create campaign');
     } finally {
       setBusy('');
     }
   }
 
-  async function handleFundCampaign(campaignId, amountAtto) {
+  async function handleFundCampaign(campaignId, attoAmount) {
     if (!me) {
-      setError('Please connect your wallet first.');
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
       return;
     }
     setBusy(`fund_${campaignId}`);
     setError('');
+    setTx(null);
     try {
-      const hash = await writeAndWait(client, 'fund_campaign', [campaignId], amountAtto);
-      setTx({ label: `Successfully contributed to grant vault #${campaignId}!`, hash });
-      await refresh();
-    } catch (e) {
-      setError('Funding failed: ' + (e?.message ?? String(e)));
+      const hash = await writeAndWait(client, 'fund_campaign', [campaignId], attoAmount);
+      setTx({ hash, label: `Contributed ${formatAtto(attoAmount)} GEN to vault` });
+      await fetchCampaigns();
+      await fetchMetrics();
+    } catch (err) {
+      setError(err?.message || 'Funding failed');
     } finally {
       setBusy('');
     }
   }
 
-  async function handleSubmitDeliverable(data) {
-    setBusy('submit_deliverable');
+  async function handleSubmitDeliverable(campaignId, milestoneIdx, proofUrl, description) {
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
+    setBusy(`submit_${campaignId}_${milestoneIdx}`);
     setError('');
+    setTx(null);
     try {
-      const hash = await writeAndWait(client, 'submit_deliverable', [
-        data.campaignId,
-        BigInt(data.milestoneIdx),
-        data.desc,
-        data.evidenceUrls,
-      ]);
-      setTx({ label: 'Milestone deliverable submitted on-chain for AI evaluation!', hash });
-      setDeliverableModalData(null);
-      await refresh();
-    } catch (e) {
-      setError('Deliverable submission failed: ' + (e?.message ?? String(e)));
+      const hash = await writeAndWait(
+        client,
+        'submit_deliverable',
+        [campaignId, BigInt(milestoneIdx), proofUrl, description],
+        0n
+      );
+      setTx({ hash, label: `Submitted proof for Milestone #${milestoneIdx + 1}` });
+      setDeliverableModalState(null);
+      await fetchCampaigns();
+      if (selectedCampaign?.id === campaignId) {
+        const fresh = await readCampaign(client, campaignId);
+        setSelectedCampaign({ id: campaignId, ...fresh });
+      }
+    } catch (err) {
+      setError(err?.message || 'Submission failed');
     } finally {
       setBusy('');
     }
   }
 
   async function handleEvaluateMilestone(campaignId, milestoneIdx) {
-    setBusy(`eval_${campaignId}`);
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
+    setBusy(`eval_${campaignId}_${milestoneIdx}`);
     setError('');
-    setTx({
-      label: `GenLayer AI Validators are fetching evidence & evaluating Milestone #${milestoneIdx + 1}…`,
-      hash: null,
-    });
+    setTx(null);
     try {
-      const hash = await writeAndWait(client, 'evaluate_milestone', [campaignId, BigInt(milestoneIdx)]);
-      setTx({ label: `Milestone #${milestoneIdx + 1} evaluation finalized by AI consensus!`, hash });
-      await refresh();
-    } catch (e) {
-      setError('Milestone evaluation failed: ' + (e?.message ?? String(e)));
+      const hash = await writeAndWait(
+        client,
+        'evaluate_milestone',
+        [campaignId, BigInt(milestoneIdx)],
+        0n
+      );
+      setTx({ hash, label: `AI Consensus completed for Milestone #${milestoneIdx + 1}` });
+      await fetchCampaigns();
+      await fetchMetrics();
+      if (me) await fetchCredits(me);
+      if (selectedCampaign?.id === campaignId) {
+        const fresh = await readCampaign(client, campaignId);
+        setSelectedCampaign({ id: campaignId, ...fresh });
+      }
+    } catch (err) {
+      setError(err?.message || 'Milestone AI consensus failed');
     } finally {
       setBusy('');
     }
   }
 
   async function handlePostUpdate(campaignId, text) {
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
     setBusy(`update_${campaignId}`);
     setError('');
     try {
-      const hash = await writeAndWait(client, 'post_campaign_update', [campaignId, text]);
-      setTx({ label: 'Creator development log published on-chain!', hash });
-      await refresh();
-    } catch (e) {
-      setError('Post update failed: ' + (e?.message ?? String(e)));
+      await writeAndWait(client, 'post_campaign_update', [campaignId, text], 0n);
+      if (selectedCampaign?.id === campaignId) {
+        const fresh = await readCampaign(client, campaignId);
+        setSelectedCampaign({ id: campaignId, ...fresh });
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to post update');
     } finally {
       setBusy('');
     }
   }
 
-  async function handlePostNote(campaignId, text) {
+  async function handlePostBackerNote(campaignId, text) {
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
     setBusy(`note_${campaignId}`);
     setError('');
     try {
-      const hash = await writeAndWait(client, 'post_backer_note', [campaignId, text]);
-      setTx({ label: 'Backer endorsement note published on-chain!', hash });
-      await refresh();
-    } catch (e) {
-      setError('Post note failed: ' + (e?.message ?? String(e)));
+      await writeAndWait(client, 'post_backer_note', [campaignId, text], 0n);
+      if (selectedCampaign?.id === campaignId) {
+        const fresh = await readCampaign(client, campaignId);
+        setSelectedCampaign({ id: campaignId, ...fresh });
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to post backer note');
     } finally {
       setBusy('');
     }
   }
 
   async function handleCancelCampaign(campaignId) {
-    if (!confirm('Are you sure you want to cancel this grant? Backers will be able to claim pro-rata refunds.')) return;
+    if (!confirm('Are you sure you want to cancel this campaign? Backers will be eligible for pro-rata refunds.')) return;
     setBusy(`cancel_${campaignId}`);
     setError('');
+    setTx(null);
     try {
-      const hash = await writeAndWait(client, 'cancel_campaign', [campaignId]);
-      setTx({ label: `Campaign #${campaignId} cancelled. Unspent funds available for refund.`, hash });
-      await refresh();
-    } catch (e) {
-      setError('Cancel failed: ' + (e?.message ?? String(e)));
-    } finally {
-      setBusy('');
-    }
-  }
-
-  async function handleClaimPayout() {
-    setBusy('claim_payout');
-    setError('');
-    try {
-      const hash = await writeAndWait(client, 'claim_payout', []);
-      setTx({ label: 'Payout credits successfully withdrawn to your wallet!', hash });
-      await refresh();
-    } catch (e) {
-      setError('Claim payout failed: ' + (e?.message ?? String(e)));
+      const hash = await writeAndWait(client, 'cancel_campaign', [campaignId], 0n);
+      setTx({ hash, label: `Cancelled campaign ${campaignId}` });
+      await fetchCampaigns();
+      await fetchMetrics();
+    } catch (err) {
+      setError(err?.message || 'Cancellation failed');
     } finally {
       setBusy('');
     }
   }
 
   async function handleClaimRefund(campaignId) {
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
     setBusy(`refund_${campaignId}`);
     setError('');
+    setTx(null);
     try {
-      const hash = await writeAndWait(client, 'claim_pro_rata_refund', [campaignId]);
-      setTx({ label: `Pro-rata refund for #${campaignId} withdrawn to your wallet!`, hash });
-      await refresh();
-    } catch (e) {
-      setError('Claim refund failed: ' + (e?.message ?? String(e)));
+      const hash = await writeAndWait(client, 'claim_pro_rata_refund', [campaignId], 0n);
+      setTx({ hash, label: `Claimed pro-rata refund for ${campaignId}` });
+      await fetchCampaigns();
+      await fetchCredits(me);
+    } catch (err) {
+      setError(err?.message || 'Refund claim failed');
     } finally {
       setBusy('');
     }
   }
 
-  // Filtered Campaigns
+  async function handleClaimPayout() {
+    if (!me) {
+      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      return;
+    }
+    setBusy('claim_payout');
+    setError('');
+    setTx(null);
+    try {
+      const hash = await writeAndWait(client, 'claim_payout', [], 0n);
+      setTx({ hash, label: `Withdrew ${formatAtto(credits)} GEN to your wallet` });
+      setCredits(0n);
+    } catch (err) {
+      setError(err?.message || 'Withdrawal failed');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  // Filter campaigns
   const filteredCampaigns = campaigns.filter((c) => {
-    if (selectedCategory !== 'All Categories' && c.category !== selectedCategory) {
-      return false;
-    }
-    if (statusFilter !== 'all' && c.status !== statusFilter) {
-      return false;
-    }
+    if (selectedCategory !== 'All Categories' && c.category !== selectedCategory) return false;
+    if (statusFilter !== 'all' && c.status?.toLowerCase() !== statusFilter.toLowerCase()) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = c.title?.toLowerCase().includes(q);
@@ -282,23 +326,40 @@ export function App() {
   return (
     <div className="wrap">
       <header>
-        <div className="brand">
-          <span className="logo">🎯</span>
-          <div>
-            <h1>ImpactVault</h1>
-            <p className="sub">
-              Milestone-gated Web3 grant & crowdfunding protocol on GenLayer. Capital is locked in sequential
-              tranches and trustlessly released only when AI-validators verify that off-chain deliverables satisfy immutable criteria.
-            </p>
+        <div className="topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
+          <div className="brand" style={{ margin: 0 }}>
+            <span className="logo" style={{ fontSize: 32 }}>🎯</span>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 24, letterSpacing: '-0.02em' }}>ImpactVault</h1>
+              <p className="addr" style={{ margin: '2px 0 0', fontSize: 12 }}>
+                Contract:{' '}
+                <a href={EXPLORER_URL} target="_blank" rel="noreferrer">
+                  {truncateHash(CONTRACT_ADDRESS, 8, 6)}
+                </a>{' '}
+                · StudioNet
+              </p>
+            </div>
           </div>
+
+          <WalletHeader
+            me={me}
+            onConnect={(address, provider) => {
+              setClient(makeExtensionClient(address, provider));
+              setMe(address);
+            }}
+            onDisconnect={() => {
+              setClient(makeClient(null));
+              setMe(null);
+            }}
+          />
         </div>
-        <p className="addr">
-          Contract:{' '}
-          <a href={EXPLORER_URL} target="_blank" rel="noreferrer">
-            {truncateHash(CONTRACT_ADDRESS, 10, 8)}
-          </a>{' '}
-          · StudioNet (Gasless AI Consensus)
-        </p>
+
+        <div className="hero-desc" style={{ marginTop: 8 }}>
+          <p className="sub" style={{ margin: 0, fontSize: 14 }}>
+            Milestone-gated Web3 grant & crowdfunding protocol on GenLayer. Capital is locked in sequential
+            tranches and trustlessly released only when AI-validators verify that off-chain deliverables satisfy immutable criteria.
+          </p>
+        </div>
 
         {metrics && (
           <div className="metrics-banner">
@@ -321,21 +382,6 @@ export function App() {
           </div>
         )}
       </header>
-
-      <section className="card">
-        <h2>Wallet Connection & Faucet</h2>
-        <WalletCard
-          me={me}
-          onConnect={(address, provider) => {
-            setClient(makeExtensionClient(address, provider));
-            setMe(address);
-          }}
-          onDisconnect={() => {
-            setClient(makeClient(null));
-            setMe(null);
-          }}
-        />
-      </section>
 
       {credits > 0n && (
         <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
