@@ -24,7 +24,6 @@ import { truncateHash, formatAtto, explorerTxUrl, CATEGORIES } from './lib.js';
 export function App() {
   const [client, setClient] = useState(() => makeClient(null));
   const [me, setMe] = useState(null);
-  const [walletType, setWalletType] = useState(null); // 'keystore' or 'extension'
   const [credits, setCredits] = useState(0n);
   const [metrics, setMetrics] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -326,21 +325,13 @@ export function App() {
         <h2>Wallet Connection & Faucet</h2>
         <WalletCard
           me={me}
-          walletType={walletType}
           onUnlock={(pk, address) => {
             setClient(makeClient(pk));
             setMe(address);
-            setWalletType('keystore');
-          }}
-          onConnectExtension={(address) => {
-            setClient(makeClient(null));
-            setMe(address);
-            setWalletType('extension');
           }}
           onLock={() => {
             setClient(makeClient(null));
             setMe(null);
-            setWalletType(null);
           }}
         />
       </section>

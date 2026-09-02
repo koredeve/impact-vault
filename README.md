@@ -32,7 +32,7 @@ Traditional EVM smart contracts cannot evaluate natural language deliverables or
 * **Status:** `ACCEPTED` by StudioNet validators.
 
 ### 3. Production React DApp (`frontend/`)
-* **Dual Wallet Engine:** Browser Extension (MetaMask / Rabby / window.ethereum) + In-App AES-GCM Encrypted Burner Keystore.
+* **StudioNet Gasless Burner & Keystore:** 1-Click instant demo burner key generation + client-side AES-GCM (PBKDF2 100k rounds) encrypted persistent keystore for gasless transaction signing.
 * **Deep Vault Explorer:** Search by keyword/slug, filter by domain categories, and filter by lifecycle status.
 * **Interactive Vault Detail Modal:** Milestone visual roadmap, deliverable proof links, AI consensus logs, on-chain updates, and backer ledger.
 * **Step-by-Step Campaign Wizard:** 1-click criteria templates ("Open Source Code", "StudioNet Deployment", "Security Review") + Live BPS allocation calculator.
@@ -50,12 +50,12 @@ pytest tests/direct/ -v
 ```
 **Result:** 13 / 13 passed (100% green).
 
-### 2. Frontend Unit Tests
-Run frontend unit tests covering keystore encryption, formatting, relative time, templates, and utilities:
+### 2. Frontend Unit & Signed Write Tests
+Run frontend test suite covering signed contract writes, keystore encryption, formatting, relative time, templates, and utilities:
 ```bash
 cd frontend && npm test
 ```
-**Result:** 6 / 6 passed (100% green).
+**Result:** 9 / 9 passed (100% green).
 
 ---
 
