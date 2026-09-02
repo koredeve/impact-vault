@@ -58,6 +58,11 @@ export function App() {
     }
   }, [me]);
 
+  async function refresh() {
+    await Promise.all([fetchMetrics(), fetchCampaigns()]);
+    if (me) await fetchCredits(me);
+  }
+
   async function fetchMetrics() {
     const data = await readPlatformMetrics(client);
     if (data) setMetrics(data);
