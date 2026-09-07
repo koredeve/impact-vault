@@ -113,19 +113,21 @@ export function App() {
         client,
         'create_campaign',
         [
-          formData.id,
-          formData.title,
-          formData.description,
-          formData.category,
+          formData.cid,
           formData.beneficiary,
-          formData.targetAmountAtto,
-          formData.milestoneBps,
-          formData.milestoneCriteria,
+          formData.title,
+          formData.category,
+          formData.desc,
+          formData.targetAtto,
+          formData.titles,
+          formData.criteria,
+          formData.bpsArray,
         ],
         0n
       );
       setTx({ hash, label: `Created grant vault "${formData.title}"` });
       setCreateModalOpen(false);
+      setPresetMilestones(null);
       await fetchCampaigns();
       await fetchMetrics();
     } catch (err) {
@@ -155,11 +157,12 @@ export function App() {
     }
   }
 
-  async function handleSubmitDeliverable(campaignId, milestoneIdx, proofUrl, description) {
+  async function handleSubmitDeliverable(data) {
     if (!me) {
       alert('Please connect your browser wallet (MetaMask / Rabby) first.');
       return;
     }
+    const { campaignId, milestoneIdx, desc, evidenceUrls } = data;
     setBusy(`submit_${campaignId}_${milestoneIdx}`);
     setError('');
     setTx(null);
@@ -167,11 +170,11 @@ export function App() {
       const hash = await writeAndWait(
         client,
         'submit_deliverable',
-        [campaignId, BigInt(milestoneIdx), proofUrl, description],
+        [campaignId, BigInt(milestoneIdx), desc, evidenceUrls],
         0n
       );
-      setTx({ hash, label: `Submitted proof for Milestone #${milestoneIdx + 1}` });
-      setDeliverableModalState(null);
+      setTx({ hash, label: `Submitted proof for Milestone #${Number(milestoneIdx) + 1}` });
+      setDeliverableModalData(null);
       await fetchCampaigns();
       if (selectedCampaign?.id === campaignId) {
         const fresh = await readCampaign(client, campaignId);

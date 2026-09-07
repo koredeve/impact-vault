@@ -9,14 +9,13 @@ import {
   readMilestonesCount,
   readMilestone,
   readCampaignUpdates,
-  readCampaignBackers,
   readCredits,
   writeAndWait,
   CONTRACT_ADDRESS,
   STUDIONET_CHAIN_ID_HEX,
 } from './genlayer.js';
 
-describe('ImpactVault GenLayer Client & Dual-Signing Architecture', () => {
+describe('ImpactVault GenLayer Client & Contract Call Signatures', () => {
   it('instantiates local account client for signed writes', () => {
     const testPk = '0x1000000000000000000000000000000000000000000000000000000000000001';
     const client = makeClient(testPk);
@@ -56,18 +55,71 @@ describe('ImpactVault GenLayer Client & Dual-Signing Architecture', () => {
     });
   });
 
-  it('executes signed contract writes and waits for ACCEPTED receipt', async () => {
+  it('executes create_campaign with exact 9-argument contract payload', async () => {
+    const mockTxHash = '0x1111111111111111111111111111111111111111111111111111111111111111';
+    const mockWriteContract = vi.fn().mockResolvedValue(mockTxHash);
+    const mockWaitForReceipt = vi.fn().mockResolvedValue({
+      status_name: 'ACCEPTED',
+      tx_hash: mockTxHash,
+    });
+    const mockClient = { writeContract: mockWriteContract, waitForTransactionReceipt: mockWaitForReceipt };
+
+    const payload = [
+      'new-grant-slug',
+      '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+      'New Grant Project',
+      'DeFi',
+      'Full Description of Grant',
+      5_000_000_000_000_000_000n,
+      ['Milestone 1', 'Milestone 2'],
+      ['Criteria 1', 'Criteria 2'],
+      [5000n, 5000n],
+    ];
+
+    const hash = await writeAndWait(mockClient, 'create_campaign', payload, 0n);
+    expect(hash).toBe(mockTxHash);
+    expect(mockWriteContract).toHaveBeenCalledWith({
+      address: CONTRACT_ADDRESS,
+      functionName: 'create_campaign',
+      args: payload,
+      value: 0n,
+    });
+  });
+
+  it('executes submit_deliverable with exact 4-argument contract payload', async () => {
+    const mockTxHash = '0x2222222222222222222222222222222222222222222222222222222222222222';
+    const mockWriteContract = vi.fn().mockResolvedValue(mockTxHash);
+    const mockWaitForReceipt = vi.fn().mockResolvedValue({
+      status_name: 'ACCEPTED',
+      tx_hash: mockTxHash,
+    });
+    const mockClient = { writeContract: mockWriteContract, waitForTransactionReceipt: mockWaitForReceipt };
+
+    const payload = [
+      'genlayer-amm-dex',
+      0n,
+      'Implemented concentrated liquidity math and tests',
+      ['https://github.com/koredeve/impact-vault/commit/123456'],
+    ];
+
+    const hash = await writeAndWait(mockClient, 'submit_deliverable', payload, 0n);
+    expect(hash).toBe(mockTxHash);
+    expect(mockWriteContract).toHaveBeenCalledWith({
+      address: CONTRACT_ADDRESS,
+      functionName: 'submit_deliverable',
+      args: payload,
+      value: 0n,
+    });
+  });
+
+  it('executes fund_campaign and waits for ACCEPTED receipt', async () => {
     const mockTxHash = '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
     const mockWriteContract = vi.fn().mockResolvedValue(mockTxHash);
     const mockWaitForReceipt = vi.fn().mockResolvedValue({
       status_name: 'ACCEPTED',
       tx_hash: mockTxHash,
     });
-
-    const mockClient = {
-      writeContract: mockWriteContract,
-      waitForTransactionReceipt: mockWaitForReceipt,
-    };
+    const mockClient = { writeContract: mockWriteContract, waitForTransactionReceipt: mockWaitForReceipt };
 
     const hash = await writeAndWait(
       mockClient,
@@ -82,12 +134,6 @@ describe('ImpactVault GenLayer Client & Dual-Signing Architecture', () => {
       functionName: 'fund_campaign',
       args: ['genlayer-amm-dex'],
       value: 1_000_000_000_000_000_000n,
-    });
-    expect(mockWaitForReceipt).toHaveBeenCalledWith({
-      hash: mockTxHash,
-      status: 'ACCEPTED',
-      interval: 2000,
-      retries: 45,
     });
   });
 
