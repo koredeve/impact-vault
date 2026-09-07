@@ -440,7 +440,7 @@ export function App() {
           <button className="ghost" style={{ fontSize: 13, flex: '1 1 auto' }} onClick={() => setAssistantModalOpen(true)}>
             ✨ Criteria Assistant
           </button>
-          <button style={{ flex: '1 1 auto' }} onClick={() => setCreateModalOpen(true)} disabled={!me}>
+          <button style={{ flex: '1 1 auto' }} onClick={() => setCreateModalOpen(true)}>
             + Launch Grant Vault
           </button>
         </div>
