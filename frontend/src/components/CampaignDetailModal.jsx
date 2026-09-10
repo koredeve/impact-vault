@@ -173,14 +173,25 @@ export function CampaignDetailModal({
                   >
                     {busy === `fund_${campaign.id}` ? 'Funding…' : '💳 Back Grant'}
                   </button>
+                  {me && BigInt(campaign.total_funded) < BigInt(campaign.target_amount) && (
+                    <button
+                      className="ghost"
+                      style={{ padding: '6px 12px', fontSize: 12, borderColor: 'var(--accent)' }}
+                      onClick={() => onFund(campaign.id, BigInt(campaign.target_amount) - BigInt(campaign.total_funded))}
+                      disabled={Boolean(busy)}
+                      title="Fund remaining balance to instantly activate Phase 1"
+                    >
+                      ⚡ Activate Vault ({formatAtto(BigInt(campaign.target_amount) - BigInt(campaign.total_funded))} GEN)
+                    </button>
+                  )}
                 </div>
               )}
 
               {campaign.status === 'active' && currentM && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {(isBeneficiary || isCreator) && (currentM.status === 'pending' || currentM.status === 'rejected') && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {(currentM.status === 'pending' || currentM.status === 'rejected') && (
                     <button
-                      style={{ padding: '8px 14px', fontSize: 13 }}
+                      style={{ padding: '8px 16px', fontSize: 13, fontWeight: 700 }}
                       onClick={() => onSubmitDeliverable(campaign, Number(campaign.current_milestone_index), currentM)}
                       disabled={Boolean(busy)}
                     >
@@ -191,12 +202,18 @@ export function CampaignDetailModal({
                   {currentM.status === 'submitted' && (
                     <button
                       className="success"
-                      style={{ padding: '8px 14px', fontSize: 13 }}
+                      style={{ padding: '8px 16px', fontSize: 13, fontWeight: 700 }}
                       onClick={() => onEvaluateMilestone(campaign.id, Number(campaign.current_milestone_index))}
                       disabled={Boolean(busy)}
                     >
                       {busy === `eval_${campaign.id}` ? 'Evaluating in AI Consensus…' : '⚡ Run AI Consensus'}
                     </button>
+                  )}
+
+                  {!isBeneficiary && !isCreator && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      (Connected as Backer/Visitor · Creator: {truncateHash(campaign.creator, 5, 4)})
+                    </span>
                   )}
                 </div>
               )}
@@ -301,6 +318,31 @@ export function CampaignDetailModal({
                       <div style={{ fontSize: 13, fontStyle: 'italic' }}>
                         "{m.evaluation_notes}"
                       </div>
+                    </div>
+                  )}
+
+                  {/* Direct Action for Active Milestone */}
+                  {isCurrent && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {(m.status === 'pending' || m.status === 'rejected') && (
+                        <button
+                          style={{ fontSize: 12, padding: '6px 14px' }}
+                          onClick={() => onSubmitDeliverable(campaign, idx, m)}
+                          disabled={Boolean(busy)}
+                        >
+                          📤 Submit Deliverable for Milestone #{idx + 1}
+                        </button>
+                      )}
+                      {m.status === 'submitted' && (
+                        <button
+                          className="success"
+                          style={{ fontSize: 12, padding: '6px 14px' }}
+                          onClick={() => onEvaluateMilestone(campaign.id, idx)}
+                          disabled={Boolean(busy)}
+                        >
+                          {busy === `eval_${campaign.id}` ? 'Evaluating…' : `⚡ Run AI Consensus for Milestone #${idx + 1}`}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

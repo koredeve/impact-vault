@@ -1,6 +1,6 @@
 import { createClient, createAccount } from 'genlayer-js';
 import { studionet } from 'genlayer-js/chains';
-import { explorerAddressUrl } from './lib.js';
+import { explorerAddressUrl, SEEDED_CAMPAIGNS_FALLBACK } from './lib.js';
 
 export const CONTRACT_ADDRESS = '0xaa0B08C948E1106fbfc8EfeADd75173fbee802d5';
 export const EXPLORER_URL = explorerAddressUrl(CONTRACT_ADDRESS);
@@ -148,9 +148,11 @@ export async function readCredits(client, addr) {
 }
 
 export async function readCampaignFull(client, campaignId) {
+  const fallback = SEEDED_CAMPAIGNS_FALLBACK.find((c) => c.id === campaignId);
+
   try {
     const camp = await readCampaign(client, campaignId);
-    if (!camp) return null;
+    if (!camp) return fallback || null;
 
     const totalM = Number(camp.total_milestones || 0n);
     const milestonePromises = [];
@@ -163,31 +165,42 @@ export async function readCampaignFull(client, campaignId) {
       );
     }
 
-    const [milestones, updates, backers] = await Promise.all([
+    const [fetchedMilestones, updates, backers] = await Promise.all([
       Promise.all(milestonePromises),
       readCampaignUpdates(client, campaignId).catch(() => []),
       readCampaignBackers(client, campaignId).catch(() => []),
     ]);
 
+    const validMilestones = fetchedMilestones.filter(Boolean);
+    const finalMilestones = validMilestones.length > 0
+      ? validMilestones
+      : (fallback?.milestones || []);
+
     return {
       id: campaignId,
       ...camp,
-      milestones: milestones.filter(Boolean),
-      updates: Array.isArray(updates) ? updates : [],
-      backers: Array.isArray(backers) ? backers : [],
+      milestones: finalMilestones,
+      updates: Array.isArray(updates) && updates.length > 0 ? updates : (fallback?.updates || []),
+      backers: Array.isArray(backers) && backers.length > 0 ? backers : (fallback?.backers || []),
     };
   } catch (err) {
     console.error(`readCampaignFull failed for ${campaignId}:`, err);
-    return null;
+    return fallback || null;
   }
 }
 
 export async function readAllCampaignsFull(client) {
-  const ids = await listCampaignIds(client);
-  const list = await Promise.all(
-    ids.map((id) => readCampaignFull(client, id))
-  );
-  return list.filter(Boolean);
+  try {
+    const ids = await listCampaignIds(client);
+    const uniqueIds = Array.from(new Set([...(ids || []), ...SEEDED_CAMPAIGNS_FALLBACK.map((s) => s.id)]));
+    const list = await Promise.all(
+      uniqueIds.map((id) => readCampaignFull(client, id))
+    );
+    return list.filter(Boolean);
+  } catch (err) {
+    console.error('readAllCampaignsFull failed:', err);
+    return SEEDED_CAMPAIGNS_FALLBACK;
+  }
 }
 
 export async function writeAndWait(client, functionName, args = [], value = 0n) {

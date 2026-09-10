@@ -189,7 +189,9 @@ describe('ImpactVault GenLayer Client & Contract Call Signatures', () => {
     expect(fullCampaign.milestones[1].title).toBe('Milestone #2');
 
     const allFull = await readAllCampaignsFull(mockClient);
-    expect(allFull).toHaveLength(1);
-    expect(allFull[0].milestones).toHaveLength(2);
+    expect(allFull.length).toBeGreaterThanOrEqual(1);
+    const testCamp = allFull.find((c) => c.id === 'full-test-campaign');
+    expect(testCamp).toBeDefined();
+    expect(testCamp.milestones).toHaveLength(2);
   });
 });
