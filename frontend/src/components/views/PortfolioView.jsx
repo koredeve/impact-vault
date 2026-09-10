@@ -7,6 +7,10 @@ export function PortfolioView({
   credits,
   campaigns,
   onSelectCampaign,
+  onFund,
+  onSubmitDeliverable,
+  onEvaluateMilestone,
+  onCancel,
   onClaimPayout,
   onClaimRefund,
   onOpenCreate,
@@ -130,7 +134,14 @@ export function PortfolioView({
                 <CampaignCard
                   key={campaign.id}
                   campaign={campaign}
+                  me={me}
                   onSelect={onSelectCampaign}
+                  onFund={onFund}
+                  onSubmitDeliverable={onSubmitDeliverable}
+                  onEvaluateMilestone={onEvaluateMilestone}
+                  onCancel={onCancel}
+                  onClaimRefund={onClaimRefund}
+                  busy={busy}
                 />
               ))}
             </div>
@@ -155,7 +166,14 @@ export function PortfolioView({
                 <CampaignCard
                   key={campaign.id}
                   campaign={campaign}
+                  me={me}
                   onSelect={onSelectCampaign}
+                  onFund={onFund}
+                  onSubmitDeliverable={onSubmitDeliverable}
+                  onEvaluateMilestone={onEvaluateMilestone}
+                  onCancel={onCancel}
+                  onClaimRefund={onClaimRefund}
+                  busy={busy}
                 />
               ))}
             </div>

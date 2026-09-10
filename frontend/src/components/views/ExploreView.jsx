@@ -5,7 +5,14 @@ import { CATEGORIES } from '../../lib.js';
 export function ExploreView({
   campaigns,
   loading,
+  me,
   onSelectCampaign,
+  onFund,
+  onSubmitDeliverable,
+  onEvaluateMilestone,
+  onCancel,
+  onClaimRefund,
+  busy,
   onOpenCreate,
   onOpenAssistant,
   onRefresh,
@@ -159,7 +166,14 @@ export function ExploreView({
             <CampaignCard
               key={campaign.id}
               campaign={campaign}
+              me={me}
               onSelect={onSelectCampaign}
+              onFund={onFund}
+              onSubmitDeliverable={onSubmitDeliverable}
+              onEvaluateMilestone={onEvaluateMilestone}
+              onCancel={onCancel}
+              onClaimRefund={onClaimRefund}
+              busy={busy}
             />
           ))}
         </div>

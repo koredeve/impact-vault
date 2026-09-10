@@ -443,7 +443,14 @@ export function App() {
           <ExploreView
             campaigns={campaigns}
             loading={loading}
+            me={me}
             onSelectCampaign={(c) => setSelectedCampaign(c)}
+            onFund={handleFundCampaign}
+            onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
+            onEvaluateMilestone={handleEvaluateMilestone}
+            onCancel={handleCancelCampaign}
+            onClaimRefund={handleClaimRefund}
+            busy={busy}
             onOpenCreate={() => navigateTo('create')}
             onOpenAssistant={() => setAssistantModalOpen(true)}
             onRefresh={refresh}
@@ -476,6 +483,10 @@ export function App() {
             credits={credits}
             campaigns={campaigns}
             onSelectCampaign={(c) => setSelectedCampaign(c)}
+            onFund={handleFundCampaign}
+            onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
+            onEvaluateMilestone={handleEvaluateMilestone}
+            onCancel={handleCancelCampaign}
             onClaimPayout={handleClaimPayout}
             onClaimRefund={handleClaimRefund}
             onOpenCreate={() => navigateTo('create')}
