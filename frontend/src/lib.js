@@ -285,7 +285,6 @@ export function formatTimeAgo(timestamp) {
 }
 
 export const CATEGORIES = [
-  'All Categories',
   'DeFi',
   'AI / Agents',
   'Infrastructure',

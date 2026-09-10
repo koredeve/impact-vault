@@ -328,6 +328,16 @@ export function App() {
     }
   }
 
+  const dynamicTvl = campaigns.reduce((sum, c) => sum + BigInt(c.total_funded || 0n), 0n);
+  const dynamicReleased = campaigns.reduce((sum, c) => sum + BigInt(c.total_released || 0n), 0n);
+  const dynamicActive = campaigns.filter((c) => c.status === 'active' || c.status === 'funding').length;
+  const dynamicCompleted = campaigns.filter((c) => c.status === 'completed').length;
+
+  const displayTvl = metrics?.tvl_atto && BigInt(metrics.tvl_atto) > dynamicTvl ? BigInt(metrics.tvl_atto) : dynamicTvl;
+  const displayReleased = metrics?.total_released_atto && BigInt(metrics.total_released_atto) > dynamicReleased ? BigInt(metrics.total_released_atto) : dynamicReleased;
+  const displayActive = metrics?.active_campaigns ? (Number(metrics.active_campaigns) + Number(metrics.funding_campaigns || 0n)) : dynamicActive;
+  const displayCompleted = metrics?.completed_campaigns ? Number(metrics.completed_campaigns) : dynamicCompleted;
+
   return (
     <div className="app-container">
       {/* Top Navbar */}
@@ -394,27 +404,27 @@ export function App() {
       <section className="metrics-bar" style={{ marginTop: 20 }}>
         <div className="metric-box">
           <span className="metric-label">TOTAL VAULT TVL</span>
-          <span className="metric-val">{formatAtto(metrics?.tvl_atto || 0n)} GEN</span>
+          <span className="metric-val">{formatAtto(displayTvl)} GEN</span>
           <span className="metric-sub">Crowdfunded capital locked</span>
         </div>
         <div className="metric-box">
           <span className="metric-label">TOTAL DISBURSED</span>
           <span className="metric-val" style={{ color: 'var(--ok)' }}>
-            {formatAtto(metrics?.total_released_atto || 0n)} GEN
+            {formatAtto(displayReleased)} GEN
           </span>
           <span className="metric-sub">Released via AI consensus</span>
         </div>
         <div className="metric-box">
           <span className="metric-label">ACTIVE GRANT VAULTS</span>
           <span className="metric-val" style={{ color: 'var(--cyan)' }}>
-            {Number(metrics?.active_campaigns || 0n) + Number(metrics?.funding_campaigns || 0n)}
+            {displayActive}
           </span>
           <span className="metric-sub">Sequential milestone tranches</span>
         </div>
         <div className="metric-box">
           <span className="metric-label">COMPLETED PROJECTS</span>
           <span className="metric-val" style={{ color: '#a855f7' }}>
-            {Number(metrics?.completed_campaigns || 0n)}
+            {displayCompleted}
           </span>
           <span className="metric-sub">100% roadmap achieved</span>
         </div>

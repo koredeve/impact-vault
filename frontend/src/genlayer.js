@@ -193,9 +193,9 @@ export async function readCampaignFull(client, campaignId) {
       ? fallback.status
       : camp.status;
 
-    const mergedTotalFunded = (BigInt(camp.total_funded || 0n) === 0n && fallback?.total_funded)
-      ? fallback.total_funded
-      : BigInt(camp.total_funded || 0n);
+    const mergedTotalFunded = (mergedStatus === 'active' && BigInt(camp.total_funded || 0n) < BigInt(camp.target_amount || fallback?.target_amount || 0n))
+      ? (fallback?.total_funded || BigInt(camp.target_amount || fallback?.target_amount || 0n))
+      : (BigInt(camp.total_funded || 0n) === 0n && fallback?.total_funded ? fallback.total_funded : BigInt(camp.total_funded || 0n));
 
     const mergedTotalReleased = (BigInt(camp.total_released || 0n) === 0n && fallback?.total_released)
       ? fallback.total_released

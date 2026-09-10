@@ -109,20 +109,45 @@ export function CampaignCard({
         )}
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: currentM && (campaign.status === 'active' || campaign.status === 'funding') ? '1fr 1fr' : '1fr', gap: 8 }}>
           <button
             type="button"
             className="ghost"
-            style={{ flex: 1, fontSize: 12, padding: '6px 10px' }}
+            style={{ fontSize: 12, padding: '8px 10px', textAlign: 'center' }}
             onClick={() => onSelect(campaign)}
           >
-            🔍 View Full Vault & Roadmap
+            🔍 View Vault
           </button>
+
+          {currentM && (campaign.status === 'active' || campaign.status === 'funding') && (
+            <>
+              {(currentM.status === 'pending' || currentM.status === 'rejected') && (
+                <button
+                  style={{ padding: '8px 10px', fontSize: 12, fontWeight: 700, textAlign: 'center' }}
+                  onClick={() => onSubmitDeliverable(campaign, Number(campaign.current_milestone_index), currentM)}
+                  disabled={Boolean(busy)}
+                >
+                  📤 Submit Proof
+                </button>
+              )}
+
+              {currentM.status === 'submitted' && (
+                <button
+                  className="success"
+                  style={{ padding: '8px 10px', fontSize: 12, fontWeight: 700, textAlign: 'center' }}
+                  onClick={() => onEvaluateMilestone(campaign.id, Number(campaign.current_milestone_index))}
+                  disabled={Boolean(busy)}
+                >
+                  {busy === `eval_${campaign.id}` ? 'Evaluating…' : '⚡ AI Consensus'}
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         {campaign.status === 'funding' && (
-          <div className="row">
+          <div className="row" style={{ marginTop: 8 }}>
             <input
               type="number"
               step="0.1"
@@ -138,31 +163,6 @@ export function CampaignCard({
             >
               {busy === `fund_${campaign.id}` ? 'Funding…' : '💳 Back Grant'}
             </button>
-          </div>
-        )}
-
-        {currentM && (campaign.status === 'active' || campaign.status === 'funding') && (
-          <div className="row" style={{ marginTop: 6 }}>
-            {(currentM.status === 'pending' || currentM.status === 'rejected') && (
-              <button
-                style={{ flex: 1, padding: '7px 12px', fontSize: 12, fontWeight: 700 }}
-                onClick={() => onSubmitDeliverable(campaign, Number(campaign.current_milestone_index), currentM)}
-                disabled={Boolean(busy)}
-              >
-                📤 Submit Milestone Proof
-              </button>
-            )}
-
-            {currentM.status === 'submitted' && (
-              <button
-                className="success"
-                style={{ flex: 1, padding: '7px 12px', fontSize: 12, fontWeight: 700 }}
-                onClick={() => onEvaluateMilestone(campaign.id, Number(campaign.current_milestone_index))}
-                disabled={Boolean(busy)}
-              >
-                {busy === `eval_${campaign.id}` ? 'Evaluating…' : '⚡ Run AI Consensus'}
-              </button>
-            )}
           </div>
         )}
 
