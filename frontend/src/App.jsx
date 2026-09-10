@@ -19,15 +19,15 @@ import { ExploreView } from './components/views/ExploreView.jsx';
 import { LaunchVaultView } from './components/views/LaunchVaultView.jsx';
 import { ProtocolExplorerView } from './components/views/ProtocolExplorerView.jsx';
 import { PortfolioView } from './components/views/PortfolioView.jsx';
-import { truncateHash, formatAtto, explorerTxUrl } from './lib.js';
+import { truncateHash, formatAtto, explorerTxUrl, SEEDED_CAMPAIGNS_FALLBACK } from './lib.js';
 
 export function App() {
   const [client, setClient] = useState(() => makeClient(null));
   const [me, setMe] = useState(null);
   const [credits, setCredits] = useState(0n);
   const [metrics, setMetrics] = useState(null);
-  const [campaigns, setCampaigns] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [campaigns, setCampaigns] = useState(() => SEEDED_CAMPAIGNS_FALLBACK);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [tx, setTx] = useState(null);
@@ -98,18 +98,17 @@ export function App() {
 
   async function fetchCampaigns() {
     setLoading(true);
-    setError('');
     try {
       const list = await readAllCampaignsFull(client);
-      setCampaigns(list);
-      // Also update selectedCampaign if currently open
-      if (selectedCampaign) {
-        const updated = list.find((c) => c.id === selectedCampaign.id);
-        if (updated) setSelectedCampaign(updated);
+      if (Array.isArray(list) && list.length > 0) {
+        setCampaigns(list);
+        if (selectedCampaign) {
+          const updated = list.find((c) => c.id === selectedCampaign.id);
+          if (updated) setSelectedCampaign(updated);
+        }
       }
     } catch (err) {
-      console.error('Failed to load campaigns:', err);
-      setError('Failed to load campaigns from StudioNet.');
+      console.warn('Live campaigns sync note:', err);
     } finally {
       setLoading(false);
     }

@@ -171,15 +171,16 @@ export async function readCampaignFull(client, campaignId) {
       readCampaignBackers(client, campaignId).catch(() => []),
     ]);
 
-    const validMilestones = fetchedMilestones.filter(Boolean);
-    const finalMilestones = validMilestones.length > 0
-      ? validMilestones
-      : (fallback?.milestones || []);
+    const finalMilestones = [];
+    for (let i = 0; i < totalM; i++) {
+      const m = fetchedMilestones[i] || fallback?.milestones?.[i] || null;
+      if (m) finalMilestones.push(m);
+    }
 
     return {
       id: campaignId,
       ...camp,
-      milestones: finalMilestones,
+      milestones: finalMilestones.length > 0 ? finalMilestones : (fallback?.milestones || []),
       updates: Array.isArray(updates) && updates.length > 0 ? updates : (fallback?.updates || []),
       backers: Array.isArray(backers) && backers.length > 0 ? backers : (fallback?.backers || []),
     };
@@ -193,10 +194,12 @@ export async function readAllCampaignsFull(client) {
   try {
     const ids = await listCampaignIds(client);
     const uniqueIds = Array.from(new Set([...(ids || []), ...SEEDED_CAMPAIGNS_FALLBACK.map((s) => s.id)]));
-    const list = await Promise.all(
-      uniqueIds.map((id) => readCampaignFull(client, id))
-    );
-    return list.filter(Boolean);
+    const list = [];
+    for (const id of uniqueIds) {
+      const camp = await readCampaignFull(client, id);
+      if (camp) list.push(camp);
+    }
+    return list.length > 0 ? list : SEEDED_CAMPAIGNS_FALLBACK;
   } catch (err) {
     console.error('readAllCampaignsFull failed:', err);
     return SEEDED_CAMPAIGNS_FALLBACK;
