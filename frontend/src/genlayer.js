@@ -173,13 +173,46 @@ export async function readCampaignFull(client, campaignId) {
 
     const finalMilestones = [];
     for (let i = 0; i < totalM; i++) {
-      const m = fetchedMilestones[i] || fallback?.milestones?.[i] || null;
-      if (m) finalMilestones.push(m);
+      const fetched = fetchedMilestones[i];
+      const fb = fallback?.milestones?.[i];
+      if (fetched && fb) {
+        finalMilestones.push({
+          ...fb,
+          ...fetched,
+          deliverable_desc: fetched.deliverable_desc || fb.deliverable_desc || '',
+          evidence_urls: Array.isArray(fetched.evidence_urls) && fetched.evidence_urls.length > 0 ? fetched.evidence_urls : (fb.evidence_urls || []),
+          evaluation_notes: fetched.evaluation_notes || fb.evaluation_notes || '',
+          status: fetched.status !== 'pending' ? fetched.status : (fb.status || fetched.status),
+        });
+      } else {
+        finalMilestones.push(fetched || fb || null);
+      }
     }
+
+    const mergedStatus = (camp.status === 'funding' && fallback?.status && fallback.status !== 'funding')
+      ? fallback.status
+      : camp.status;
+
+    const mergedTotalFunded = (BigInt(camp.total_funded || 0n) === 0n && fallback?.total_funded)
+      ? fallback.total_funded
+      : BigInt(camp.total_funded || 0n);
+
+    const mergedTotalReleased = (BigInt(camp.total_released || 0n) === 0n && fallback?.total_released)
+      ? fallback.total_released
+      : BigInt(camp.total_released || 0n);
+
+    const mergedCurrentMilestone = (Number(camp.current_milestone_index || 0n) === 0 && fallback?.current_milestone_index)
+      ? fallback.current_milestone_index
+      : BigInt(camp.current_milestone_index || 0n);
 
     return {
       id: campaignId,
+      ...fallback,
       ...camp,
+      status: mergedStatus,
+      total_funded: mergedTotalFunded,
+      total_released: mergedTotalReleased,
+      current_milestone_index: mergedCurrentMilestone,
       milestones: finalMilestones.length > 0 ? finalMilestones : (fallback?.milestones || []),
       updates: Array.isArray(updates) && updates.length > 0 ? updates : (fallback?.updates || []),
       backers: Array.isArray(backers) && backers.length > 0 ? backers : (fallback?.backers || []),

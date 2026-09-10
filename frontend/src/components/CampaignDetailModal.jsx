@@ -187,7 +187,7 @@ export function CampaignDetailModal({
                 </div>
               )}
 
-              {campaign.status === 'active' && currentM && (
+              {currentM && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   {(currentM.status === 'pending' || currentM.status === 'rejected') && (
                     <button
@@ -321,22 +321,22 @@ export function CampaignDetailModal({
                     </div>
                   )}
 
-                  {/* Direct Action for Active Milestone */}
-                  {isCurrent && (
+                  {/* Direct Action for Milestone */}
+                  {(isCurrent || idx === Number(campaign.current_milestone_index) || m.status === 'pending' || m.status === 'submitted') && (
                     <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
                       {(m.status === 'pending' || m.status === 'rejected') && (
                         <button
-                          style={{ fontSize: 12, padding: '6px 14px' }}
+                          style={{ fontSize: 12, padding: '6px 14px', fontWeight: 700 }}
                           onClick={() => onSubmitDeliverable(campaign, idx, m)}
                           disabled={Boolean(busy)}
                         >
-                          📤 Submit Deliverable for Milestone #{idx + 1}
+                          📤 Submit Milestone Proof for Milestone #{idx + 1}
                         </button>
                       )}
                       {m.status === 'submitted' && (
                         <button
                           className="success"
-                          style={{ fontSize: 12, padding: '6px 14px' }}
+                          style={{ fontSize: 12, padding: '6px 14px', fontWeight: 700 }}
                           onClick={() => onEvaluateMilestone(campaign.id, idx)}
                           disabled={Boolean(busy)}
                         >

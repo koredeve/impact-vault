@@ -95,11 +95,11 @@ export const SEEDED_CAMPAIGNS_FALLBACK = [
     beneficiary: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
     description: 'High-throughput decentralized automated market maker utilizing GenLayer AI validator consensus for MEV-resistant swaps, dynamic fee scaling, and natural language limit orders.',
     target_amount: 5000000000000000000n,
-    total_funded: 2000000000000000000n,
+    total_funded: 5000000000000000000n,
     total_released: 0n,
     current_milestone_index: 0n,
     total_milestones: 3n,
-    status: 'funding',
+    status: 'active',
     milestones: [
       {
         title: 'Milestone 1: Mathematical Spec & Core Contracts',

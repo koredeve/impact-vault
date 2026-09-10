@@ -141,22 +141,22 @@ export function CampaignCard({
           </div>
         )}
 
-        {campaign.status === 'active' && currentM && (
-          <div className="row">
-            {(isBeneficiary || isCreator) && (currentM.status === 'pending' || currentM.status === 'rejected') && (
+        {currentM && (campaign.status === 'active' || campaign.status === 'funding') && (
+          <div className="row" style={{ marginTop: 6 }}>
+            {(currentM.status === 'pending' || currentM.status === 'rejected') && (
               <button
-                style={{ flex: 1, padding: '7px 12px', fontSize: 12 }}
+                style={{ flex: 1, padding: '7px 12px', fontSize: 12, fontWeight: 700 }}
                 onClick={() => onSubmitDeliverable(campaign, Number(campaign.current_milestone_index), currentM)}
                 disabled={Boolean(busy)}
               >
-                📤 Submit Deliverable
+                📤 Submit Milestone Proof
               </button>
             )}
 
             {currentM.status === 'submitted' && (
               <button
                 className="success"
-                style={{ flex: 1, padding: '7px 12px', fontSize: 12 }}
+                style={{ flex: 1, padding: '7px 12px', fontSize: 12, fontWeight: 700 }}
                 onClick={() => onEvaluateMilestone(campaign.id, Number(campaign.current_milestone_index))}
                 disabled={Boolean(busy)}
               >
