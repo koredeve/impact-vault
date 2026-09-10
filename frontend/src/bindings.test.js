@@ -9,6 +9,8 @@ import {
   readMilestonesCount,
   readMilestone,
   readCampaignUpdates,
+  readCampaignFull,
+  readAllCampaignsFull,
   readCredits,
   writeAndWait,
   CONTRACT_ADDRESS,
@@ -137,27 +139,57 @@ describe('ImpactVault GenLayer Client & Contract Call Signatures', () => {
     });
   });
 
-  it('reads platform metrics and campaign data correctly', async () => {
-    const mockReadContract = vi.fn().mockImplementation(({ functionName }) => {
-      if (functionName === 'get_platform_metrics') {
+  it('reads full campaign objects including nested milestones, updates, and backers', async () => {
+    const mockReadContract = vi.fn().mockImplementation(({ functionName, args }) => {
+      if (functionName === 'get_campaign') {
         return Promise.resolve({
-          tvl_atto: 2000000000000000000n,
-          total_released_atto: 0n,
-          active_campaigns: 1n,
-          completed_campaigns: 0n,
+          creator: '0x1111111111111111111111111111111111111111',
+          beneficiary: '0x2222222222222222222222222222222222222222',
+          title: 'Full Test Campaign',
+          category: 'DeFi',
+          description: 'Testing full milestone loading',
+          target_amount: 5000000000000000000n,
+          total_funded: 2000000000000000000n,
+          total_released: 0n,
+          current_milestone_index: 0n,
+          total_milestones: 2n,
+          status: 'active',
+          created_at: 1725280000n,
         });
       }
+      if (functionName === 'get_milestone') {
+        const idx = Number(args[1]);
+        return Promise.resolve({
+          title: `Milestone #${idx + 1}`,
+          criteria: `Criteria for #${idx + 1}`,
+          bps: 5000n,
+          status: 'pending',
+          deliverable_desc: '',
+          evidence_urls: [],
+          evaluation_notes: '',
+        });
+      }
+      if (functionName === 'get_campaign_updates') {
+        return Promise.resolve({ updates: [] });
+      }
+      if (functionName === 'get_campaign_backers') {
+        return Promise.resolve({ backers: [] });
+      }
       if (functionName === 'get_campaign_ids') {
-        return Promise.resolve({ ids: ['genlayer-amm-dex'] });
+        return Promise.resolve({ ids: ['full-test-campaign'] });
       }
       return Promise.resolve(null);
     });
 
     const mockClient = { readContract: mockReadContract };
-    const metrics = await readPlatformMetrics(mockClient);
-    expect(metrics.tvl_atto).toBe(2000000000000000000n);
+    const fullCampaign = await readCampaignFull(mockClient, 'full-test-campaign');
+    expect(fullCampaign).toBeDefined();
+    expect(fullCampaign.milestones).toHaveLength(2);
+    expect(fullCampaign.milestones[0].title).toBe('Milestone #1');
+    expect(fullCampaign.milestones[1].title).toBe('Milestone #2');
 
-    const ids = await listCampaignIds(mockClient);
-    expect(ids).toEqual(['genlayer-amm-dex']);
+    const allFull = await readAllCampaignsFull(mockClient);
+    expect(allFull).toHaveLength(1);
+    expect(allFull[0].milestones).toHaveLength(2);
   });
 });

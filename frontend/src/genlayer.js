@@ -147,6 +147,49 @@ export async function readCredits(client, addr) {
   });
 }
 
+export async function readCampaignFull(client, campaignId) {
+  try {
+    const camp = await readCampaign(client, campaignId);
+    if (!camp) return null;
+
+    const totalM = Number(camp.total_milestones || 0n);
+    const milestonePromises = [];
+    for (let i = 0; i < totalM; i++) {
+      milestonePromises.push(
+        readMilestone(client, campaignId, BigInt(i)).catch((err) => {
+          console.warn(`Failed to load milestone #${i} for ${campaignId}:`, err);
+          return null;
+        })
+      );
+    }
+
+    const [milestones, updates, backers] = await Promise.all([
+      Promise.all(milestonePromises),
+      readCampaignUpdates(client, campaignId).catch(() => []),
+      readCampaignBackers(client, campaignId).catch(() => []),
+    ]);
+
+    return {
+      id: campaignId,
+      ...camp,
+      milestones: milestones.filter(Boolean),
+      updates: Array.isArray(updates) ? updates : [],
+      backers: Array.isArray(backers) ? backers : [],
+    };
+  } catch (err) {
+    console.error(`readCampaignFull failed for ${campaignId}:`, err);
+    return null;
+  }
+}
+
+export async function readAllCampaignsFull(client) {
+  const ids = await listCampaignIds(client);
+  const list = await Promise.all(
+    ids.map((id) => readCampaignFull(client, id))
+  );
+  return list.filter(Boolean);
+}
+
 export async function writeAndWait(client, functionName, args = [], value = 0n) {
   const txHash = await client.writeContract({
     address: CONTRACT_ADDRESS,

@@ -3,23 +3,23 @@ import {
   makeClient,
   makeExtensionClient,
   readPlatformMetrics,
-  listCampaignIds,
-  readCampaign,
-  readMilestonesCount,
-  readMilestone,
-  readCampaignUpdates,
+  readAllCampaignsFull,
+  readCampaignFull,
   readCredits,
   writeAndWait,
   CONTRACT_ADDRESS,
   EXPLORER_URL,
 } from './genlayer.js';
 import { WalletHeader } from './components/WalletHeader.jsx';
-import { CampaignCard } from './components/CampaignCard.jsx';
 import { CampaignDetailModal } from './components/CampaignDetailModal.jsx';
-import { CreateCampaignModal } from './components/CreateCampaignModal.jsx';
 import { CriteriaAssistantModal } from './components/CriteriaAssistantModal.jsx';
 import { SubmitDeliverableModal } from './components/SubmitDeliverableModal.jsx';
-import { truncateHash, formatAtto, explorerTxUrl, CATEGORIES } from './lib.js';
+import { ConnectWalletModal } from './components/ConnectWalletModal.jsx';
+import { ExploreView } from './components/views/ExploreView.jsx';
+import { LaunchVaultView } from './components/views/LaunchVaultView.jsx';
+import { ProtocolExplorerView } from './components/views/ProtocolExplorerView.jsx';
+import { PortfolioView } from './components/views/PortfolioView.jsx';
+import { truncateHash, formatAtto, explorerTxUrl } from './lib.js';
 
 export function App() {
   const [client, setClient] = useState(() => makeClient(null));
@@ -32,18 +32,37 @@ export function App() {
   const [error, setError] = useState('');
   const [tx, setTx] = useState(null);
 
-  // Filters & State
-  const [activeTab, setActiveTab] = useState('explore'); // 'explore' or 'my'
-  const [selectedCategory, setSelectedCategory] = useState('All Categories');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'funding', 'active', 'completed', 'cancelled'
+  // Multi-View Navigation Route: 'explore' | 'create' | 'explorer' | 'portfolio'
+  const [currentRoute, setCurrentRoute] = useState(() => {
+    const hash = window.location.hash.replace('#/', '').replace('#', '');
+    if (['explore', 'create', 'explorer', 'portfolio'].includes(hash)) return hash;
+    return 'explore';
+  });
 
   // Modals
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [assistantModalOpen, setAssistantModalOpen] = useState(false);
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [presetMilestones, setPresetMilestones] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [deliverableModalData, setDeliverableModalData] = useState(null);
+
+  // Sync route with URL hash
+  useEffect(() => {
+    function handleHashChange() {
+      const hash = window.location.hash.replace('#/', '').replace('#', '');
+      if (['explore', 'create', 'explorer', 'portfolio'].includes(hash)) {
+        setCurrentRoute(hash);
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  function navigateTo(route) {
+    setCurrentRoute(route);
+    window.location.hash = `#/${route}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   useEffect(() => {
     fetchMetrics();
@@ -81,19 +100,15 @@ export function App() {
     setLoading(true);
     setError('');
     try {
-      const ids = await listCampaignIds(client);
-      const list = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const data = await readCampaign(client, id);
-            return { id, ...data };
-          } catch {
-            return null;
-          }
-        })
-      );
-      setCampaigns(list.filter(Boolean));
+      const list = await readAllCampaignsFull(client);
+      setCampaigns(list);
+      // Also update selectedCampaign if currently open
+      if (selectedCampaign) {
+        const updated = list.find((c) => c.id === selectedCampaign.id);
+        if (updated) setSelectedCampaign(updated);
+      }
     } catch (err) {
+      console.error('Failed to load campaigns:', err);
       setError('Failed to load campaigns from StudioNet.');
     } finally {
       setLoading(false);
@@ -102,7 +117,7 @@ export function App() {
 
   async function handleCreateCampaign(formData) {
     if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      setConnectModalOpen(true);
       return;
     }
     setBusy('create');
@@ -126,10 +141,10 @@ export function App() {
         0n
       );
       setTx({ hash, label: `Created grant vault "${formData.title}"` });
-      setCreateModalOpen(false);
       setPresetMilestones(null);
       await fetchCampaigns();
       await fetchMetrics();
+      navigateTo('explore');
     } catch (err) {
       setError(err?.message || 'Failed to create campaign');
     } finally {
@@ -139,7 +154,7 @@ export function App() {
 
   async function handleFundCampaign(campaignId, attoAmount) {
     if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      setConnectModalOpen(true);
       return;
     }
     setBusy(`fund_${campaignId}`);
@@ -159,7 +174,7 @@ export function App() {
 
   async function handleSubmitDeliverable(data) {
     if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      setConnectModalOpen(true);
       return;
     }
     const { campaignId, milestoneIdx, desc, evidenceUrls } = data;
@@ -177,8 +192,8 @@ export function App() {
       setDeliverableModalData(null);
       await fetchCampaigns();
       if (selectedCampaign?.id === campaignId) {
-        const fresh = await readCampaign(client, campaignId);
-        setSelectedCampaign({ id: campaignId, ...fresh });
+        const fresh = await readCampaignFull(client, campaignId);
+        if (fresh) setSelectedCampaign(fresh);
       }
     } catch (err) {
       setError(err?.message || 'Submission failed');
@@ -189,7 +204,7 @@ export function App() {
 
   async function handleEvaluateMilestone(campaignId, milestoneIdx) {
     if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      setConnectModalOpen(true);
       return;
     }
     setBusy(`eval_${campaignId}_${milestoneIdx}`);
@@ -202,16 +217,15 @@ export function App() {
         [campaignId, BigInt(milestoneIdx)],
         0n
       );
-      setTx({ hash, label: `AI Consensus completed for Milestone #${milestoneIdx + 1}` });
+      setTx({ hash, label: `Evaluated Milestone #${milestoneIdx + 1} with AI Consensus` });
       await fetchCampaigns();
       await fetchMetrics();
-      if (me) await fetchCredits(me);
       if (selectedCampaign?.id === campaignId) {
-        const fresh = await readCampaign(client, campaignId);
-        setSelectedCampaign({ id: campaignId, ...fresh });
+        const fresh = await readCampaignFull(client, campaignId);
+        if (fresh) setSelectedCampaign(fresh);
       }
     } catch (err) {
-      setError(err?.message || 'Milestone AI consensus failed');
+      setError(err?.message || 'AI Evaluation failed');
     } finally {
       setBusy('');
     }
@@ -219,16 +233,19 @@ export function App() {
 
   async function handlePostUpdate(campaignId, text) {
     if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      setConnectModalOpen(true);
       return;
     }
     setBusy(`update_${campaignId}`);
     setError('');
+    setTx(null);
     try {
-      await writeAndWait(client, 'post_campaign_update', [campaignId, text], 0n);
+      const hash = await writeAndWait(client, 'post_campaign_update', [campaignId, text], 0n);
+      setTx({ hash, label: 'Posted creator progress update' });
+      await fetchCampaigns();
       if (selectedCampaign?.id === campaignId) {
-        const fresh = await readCampaign(client, campaignId);
-        setSelectedCampaign({ id: campaignId, ...fresh });
+        const fresh = await readCampaignFull(client, campaignId);
+        if (fresh) setSelectedCampaign(fresh);
       }
     } catch (err) {
       setError(err?.message || 'Failed to post update');
@@ -239,34 +256,41 @@ export function App() {
 
   async function handlePostBackerNote(campaignId, text) {
     if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
+      setConnectModalOpen(true);
       return;
     }
     setBusy(`note_${campaignId}`);
     setError('');
+    setTx(null);
     try {
-      await writeAndWait(client, 'post_backer_note', [campaignId, text], 0n);
+      const hash = await writeAndWait(client, 'post_backer_note', [campaignId, text], 0n);
+      setTx({ hash, label: 'Posted backer community note' });
+      await fetchCampaigns();
       if (selectedCampaign?.id === campaignId) {
-        const fresh = await readCampaign(client, campaignId);
-        setSelectedCampaign({ id: campaignId, ...fresh });
+        const fresh = await readCampaignFull(client, campaignId);
+        if (fresh) setSelectedCampaign(fresh);
       }
     } catch (err) {
-      setError(err?.message || 'Failed to post backer note');
+      setError(err?.message || 'Failed to post note');
     } finally {
       setBusy('');
     }
   }
 
   async function handleCancelCampaign(campaignId) {
-    if (!confirm('Are you sure you want to cancel this campaign? Backers will be eligible for pro-rata refunds.')) return;
+    if (!confirm('Are you sure you want to cancel this campaign? Unspent vault balance will become refundable.')) return;
     setBusy(`cancel_${campaignId}`);
     setError('');
     setTx(null);
     try {
       const hash = await writeAndWait(client, 'cancel_campaign', [campaignId], 0n);
-      setTx({ hash, label: `Cancelled campaign ${campaignId}` });
+      setTx({ hash, label: 'Cancelled grant campaign' });
       await fetchCampaigns();
       await fetchMetrics();
+      if (selectedCampaign?.id === campaignId) {
+        const fresh = await readCampaignFull(client, campaignId);
+        if (fresh) setSelectedCampaign(fresh);
+      }
     } catch (err) {
       setError(err?.message || 'Cancellation failed');
     } finally {
@@ -275,18 +299,14 @@ export function App() {
   }
 
   async function handleClaimRefund(campaignId) {
-    if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
-      return;
-    }
     setBusy(`refund_${campaignId}`);
     setError('');
     setTx(null);
     try {
       const hash = await writeAndWait(client, 'claim_pro_rata_refund', [campaignId], 0n);
-      setTx({ hash, label: `Claimed pro-rata refund for ${campaignId}` });
+      setTx({ hash, label: 'Claimed pro-rata refund to credit balance' });
       await fetchCampaigns();
-      await fetchCredits(me);
+      if (me) await fetchCredits(me);
     } catch (err) {
       setError(err?.message || 'Refund claim failed');
     } finally {
@@ -295,253 +315,178 @@ export function App() {
   }
 
   async function handleClaimPayout() {
-    if (!me) {
-      alert('Please connect your browser wallet (MetaMask / Rabby) first.');
-      return;
-    }
     setBusy('claim_payout');
     setError('');
     setTx(null);
     try {
       const hash = await writeAndWait(client, 'claim_payout', [], 0n);
-      setTx({ hash, label: `Withdrew ${formatAtto(credits)} GEN to your wallet` });
-      setCredits(0n);
+      setTx({ hash, label: 'Withdrew all unlocked milestone credits to wallet' });
+      if (me) await fetchCredits(me);
     } catch (err) {
-      setError(err?.message || 'Withdrawal failed');
+      setError(err?.message || 'Payout claim failed');
     } finally {
       setBusy('');
     }
   }
 
-  // Filter campaigns
-  const filteredCampaigns = campaigns.filter((c) => {
-    if (selectedCategory !== 'All Categories' && c.category !== selectedCategory) return false;
-    if (statusFilter !== 'all' && c.status?.toLowerCase() !== statusFilter.toLowerCase()) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = c.title?.toLowerCase().includes(q);
-      const matchDesc = c.description?.toLowerCase().includes(q);
-      const matchId = c.id?.toLowerCase().includes(q);
-      if (!matchTitle && !matchDesc && !matchId) return false;
-    }
-    return true;
-  });
-
-  const myCampaigns = campaigns.filter(
-    (c) => me && (c.creator?.toLowerCase() === me.toLowerCase() || c.beneficiary?.toLowerCase() === me.toLowerCase())
-  );
-
   return (
-    <div className="wrap">
-      <header>
-        <div className="topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
-          <div className="brand" style={{ margin: 0 }}>
-            <span className="logo" style={{ fontSize: 32 }}>🎯</span>
-            <div>
-              <h1 style={{ margin: 0, fontSize: 24, letterSpacing: '-0.02em' }}>ImpactVault</h1>
-              <p className="addr" style={{ margin: '2px 0 0', fontSize: 12 }}>
-                Contract:{' '}
-                <a href={EXPLORER_URL} target="_blank" rel="noreferrer">
-                  {truncateHash(CONTRACT_ADDRESS, 8, 6)}
-                </a>{' '}
-                · StudioNet
-              </p>
-            </div>
-          </div>
-
-          <WalletHeader
-            me={me}
-            onConnect={(address, provider) => {
-              setClient(makeExtensionClient(address, provider));
-              setMe(address);
-            }}
-            onDisconnect={() => {
-              setClient(makeClient(null));
-              setMe(null);
-            }}
-          />
-        </div>
-
-        <div className="hero-desc" style={{ marginTop: 8 }}>
-          <p className="sub" style={{ margin: 0, fontSize: 14 }}>
-            Milestone-gated Web3 grant & crowdfunding protocol on GenLayer. Capital is locked in sequential
-            tranches and trustlessly released only when AI-validators verify that off-chain deliverables satisfy immutable criteria.
-          </p>
-        </div>
-
-        {metrics && (
-          <div className="metrics-banner">
-            <div className="metric-box">
-              <div className="metric-label">Total Vault TVL</div>
-              <div className="metric-val" style={{ color: 'var(--cyan)' }}>{formatAtto(metrics.tvl_atto)} GEN</div>
-            </div>
-            <div className="metric-box">
-              <div className="metric-label">Total Disbursed</div>
-              <div className="metric-val" style={{ color: 'var(--ok)' }}>{formatAtto(metrics.total_released_atto)} GEN</div>
-            </div>
-            <div className="metric-box">
-              <div className="metric-label">Active Grant Vaults</div>
-              <div className="metric-val">{Number(metrics.active_campaigns)}</div>
-            </div>
-            <div className="metric-box">
-              <div className="metric-label">Completed Projects</div>
-              <div className="metric-val" style={{ color: 'var(--accent-hover)' }}>{Number(metrics.completed_campaigns)}</div>
-            </div>
-          </div>
-        )}
-      </header>
-
-      {credits > 0n && (
-        <div className="notice" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+    <div className="app-container">
+      {/* Top Navbar */}
+      <header className="navbar">
+        <div className="nav-brand" style={{ cursor: 'pointer' }} onClick={() => navigateTo('explore')}>
+          <span className="logo-icon">🎯</span>
           <div>
-            <strong>💰 Unclaimed Beneficiary Payout Available:</strong> {formatAtto(credits)} GEN
-          </div>
-          <button className="success" style={{ padding: '6px 14px', fontSize: 13 }} onClick={handleClaimPayout} disabled={Boolean(busy)}>
-            {busy === 'claim_payout' ? 'Claiming…' : 'Withdraw to Wallet'}
-          </button>
-        </div>
-      )}
-
-      {tx && (
-        <div className="notice" style={{ marginTop: 16 }}>
-          <div className="notice-header">
-            <span>{tx.label}</span>
-            <button className="ghost" style={{ padding: '0 6px', fontSize: 12 }} onClick={() => setTx(null)}>✕</button>
-          </div>
-          {tx.hash && (
-            <div style={{ marginTop: 6, fontSize: 12 }}>
-              Tx Hash:{' '}
-              <a href={explorerTxUrl(tx.hash)} target="_blank" rel="noreferrer" className="mono">
-                {truncateHash(tx.hash, 12, 10)}
+            <h1 className="brand-title">ImpactVault</h1>
+            <div className="brand-sub">
+              <a href={EXPLORER_URL} target="_blank" rel="noreferrer" className="contract-badge" onClick={(e) => e.stopPropagation()}>
+                {truncateHash(CONTRACT_ADDRESS, 6, 6)} · StudioNet
               </a>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* Center Nav Views */}
+        <nav className="nav-links" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button
+            type="button"
+            className={`ghost nav-link-btn ${currentRoute === 'explore' ? 'active' : ''}`}
+            onClick={() => navigateTo('explore')}
+          >
+            🌐 Active Vaults ({campaigns.length})
+          </button>
+          <button
+            type="button"
+            className={`ghost nav-link-btn ${currentRoute === 'create' ? 'active' : ''}`}
+            onClick={() => navigateTo('create')}
+          >
+            ➕ Launch Vault
+          </button>
+          <button
+            type="button"
+            className={`ghost nav-link-btn ${currentRoute === 'explorer' ? 'active' : ''}`}
+            onClick={() => navigateTo('explorer')}
+          >
+            🏛️ Protocol Explorer
+          </button>
+          <button
+            type="button"
+            className={`ghost nav-link-btn ${currentRoute === 'portfolio' ? 'active' : ''}`}
+            onClick={() => navigateTo('portfolio')}
+          >
+            💼 My Portfolio
+          </button>
+        </nav>
+
+        {/* Right Wallet Header Controls */}
+        <WalletHeader
+          me={me}
+          onConnect={(address, provider) => {
+            setMe(address);
+            setClient(makeExtensionClient(address, provider));
+          }}
+          onDisconnect={() => {
+            setMe(null);
+            setClient(makeClient(null));
+          }}
+        />
+      </header>
+
+      {/* Protocol Metrics Ribbon */}
+      <section className="metrics-bar" style={{ marginTop: 20 }}>
+        <div className="metric-box">
+          <span className="metric-label">TOTAL VAULT TVL</span>
+          <span className="metric-val">{formatAtto(metrics?.tvl_atto || 0n)} GEN</span>
+          <span className="metric-sub">Crowdfunded capital locked</span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">TOTAL DISBURSED</span>
+          <span className="metric-val" style={{ color: 'var(--ok)' }}>
+            {formatAtto(metrics?.total_released_atto || 0n)} GEN
+          </span>
+          <span className="metric-sub">Released via AI consensus</span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">ACTIVE GRANT VAULTS</span>
+          <span className="metric-val" style={{ color: 'var(--cyan)' }}>
+            {Number(metrics?.active_campaigns || 0n) + Number(metrics?.funding_campaigns || 0n)}
+          </span>
+          <span className="metric-sub">Sequential milestone tranches</span>
+        </div>
+        <div className="metric-box">
+          <span className="metric-label">COMPLETED PROJECTS</span>
+          <span className="metric-val" style={{ color: '#a855f7' }}>
+            {Number(metrics?.completed_campaigns || 0n)}
+          </span>
+          <span className="metric-sub">100% roadmap achieved</span>
+        </div>
+      </section>
+
+      {/* Transaction Notifications */}
+      {tx && (
+        <div className="card tx-banner" style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <span className="pill ok" style={{ marginRight: 8 }}>✓ Confirmed on StudioNet</span>
+              <span>{tx.label}</span>
+            </div>
+            <a href={explorerTxUrl(tx.hash)} target="_blank" rel="noreferrer" className="mono" style={{ color: 'var(--cyan)' }}>
+              Tx: {truncateHash(tx.hash, 10, 8)} ↗
+            </a>
+          </div>
         </div>
       )}
 
       {error && <div className="error" style={{ marginTop: 16 }}>{error}</div>}
 
-      <div className="toolbar-wrap">
-        <div className="toolbar-tabs">
-          <button className={`tab-btn ${activeTab === 'explore' ? 'active' : ''}`} onClick={() => setActiveTab('explore')}>
-            🌐 Explore Grant Vaults ({campaigns.length})
-          </button>
-          {me && (
-            <button className={`tab-btn ${activeTab === 'my' ? 'active' : ''}`} onClick={() => setActiveTab('my')}>
-              💼 My Vaults ({myCampaigns.length})
-            </button>
-          )}
-        </div>
+      {/* Main View Router */}
+      <main style={{ marginTop: 24 }}>
+        {currentRoute === 'explore' && (
+          <ExploreView
+            campaigns={campaigns}
+            loading={loading}
+            onSelectCampaign={(c) => setSelectedCampaign(c)}
+            onOpenCreate={() => navigateTo('create')}
+            onOpenAssistant={() => setAssistantModalOpen(true)}
+            onRefresh={refresh}
+          />
+        )}
 
-        <div className="toolbar-actions">
-          <button className="ghost" style={{ fontSize: 13, flex: '1 1 auto' }} onClick={refresh} disabled={loading}>
-            {loading ? 'Refreshing…' : '↻ Refresh'}
-          </button>
-          <button className="ghost" style={{ fontSize: 13, flex: '1 1 auto' }} onClick={() => setAssistantModalOpen(true)}>
-            ✨ Criteria Assistant
-          </button>
-          <button style={{ flex: '1 1 auto' }} onClick={() => setCreateModalOpen(true)}>
-            + Launch Grant Vault
-          </button>
-        </div>
-      </div>
+        {currentRoute === 'create' && (
+          <LaunchVaultView
+            onCreate={handleCreateCampaign}
+            onOpenAssistant={() => setAssistantModalOpen(true)}
+            presetMilestones={presetMilestones}
+            busy={busy}
+            me={me}
+            onOpenConnect={() => setConnectModalOpen(true)}
+          />
+        )}
 
-      {activeTab === 'explore' && (
-        <div>
-          {/* Category Filter Chips */}
-          <div className="category-chips">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={`chip ${selectedCategory === cat ? 'active' : ''}`}
-                onClick={() => setSelectedCategory(cat)}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+        {currentRoute === 'explorer' && (
+          <ProtocolExplorerView
+            campaigns={campaigns}
+            onSelectCampaign={(c) => setSelectedCampaign(c)}
+            onRefresh={refresh}
+            loading={loading}
+          />
+        )}
 
-          {/* Search & Status Bar */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-            <input
-              placeholder="Search grant vaults by name, keyword, or identifier..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ flex: 2 }}
-            />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ minWidth: 150 }}
-            >
-              <option value="all">All States</option>
-              <option value="funding">Funding State</option>
-              <option value="active">Active Execution</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-        </div>
-      )}
+        {currentRoute === 'portfolio' && (
+          <PortfolioView
+            me={me}
+            credits={credits}
+            campaigns={campaigns}
+            onSelectCampaign={(c) => setSelectedCampaign(c)}
+            onClaimPayout={handleClaimPayout}
+            onClaimRefund={handleClaimRefund}
+            onOpenCreate={() => navigateTo('create')}
+            onOpenConnect={() => setConnectModalOpen(true)}
+            busy={busy}
+          />
+        )}
+      </main>
 
-      {loading ? (
-        <div className="skeleton" style={{ marginTop: 16 }} />
-      ) : activeTab === 'explore' ? (
-        filteredCampaigns.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <p className="hint">No grant vaults match your selected category and filters.</p>
-            <button onClick={() => setCreateModalOpen(true)} disabled={!me} style={{ marginTop: 8 }}>
-              🚀 Launch First Grant Vault
-            </button>
-          </div>
-        ) : (
-          <div className="campaign-grid">
-            {filteredCampaigns.map((camp) => (
-              <CampaignCard
-                key={camp.id}
-                campaign={camp}
-                me={me}
-                onSelect={(c) => setSelectedCampaign(c)}
-                onFund={handleFundCampaign}
-                onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
-                onEvaluateMilestone={handleEvaluateMilestone}
-                onCancel={handleCancelCampaign}
-                onClaimRefund={handleClaimRefund}
-                busy={busy}
-              />
-            ))}
-          </div>
-        )
-      ) : (
-        myCampaigns.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <p className="hint">You have not created or backed any grant vaults yet.</p>
-            <button onClick={() => setCreateModalOpen(true)} disabled={!me} style={{ marginTop: 8 }}>
-              🚀 Launch Grant Vault
-            </button>
-          </div>
-        ) : (
-          <div className="campaign-grid">
-            {myCampaigns.map((camp) => (
-              <CampaignCard
-                key={camp.id}
-                campaign={camp}
-                me={me}
-                onSelect={(c) => setSelectedCampaign(c)}
-                onFund={handleFundCampaign}
-                onSubmitDeliverable={(c, idx, m) => setDeliverableModalData({ campaign: c, milestoneIdx: idx, milestone: m })}
-                onEvaluateMilestone={handleEvaluateMilestone}
-                onCancel={handleCancelCampaign}
-                onClaimRefund={handleClaimRefund}
-                busy={busy}
-              />
-            ))}
-          </div>
-        )
-      )}
-
-      {/* Deep Drill-Down Campaign Detail Modal */}
+      {/* Campaign Detail Modal */}
       <CampaignDetailModal
         isOpen={Boolean(selectedCampaign)}
         onClose={() => setSelectedCampaign(null)}
@@ -557,30 +502,17 @@ export function App() {
         busy={busy}
       />
 
-      {/* Creation Wizard */}
-      <CreateCampaignModal
-        isOpen={createModalOpen}
-        onClose={() => {
-          setCreateModalOpen(false);
-          setPresetMilestones(null);
-        }}
-        onCreate={handleCreateCampaign}
-        onOpenAssistant={() => setAssistantModalOpen(true)}
-        presetMilestones={presetMilestones}
-        busy={busy === 'create'}
-      />
-
-      {/* AI Criteria Assistant */}
+      {/* Criteria AI Assistant Modal */}
       <CriteriaAssistantModal
         isOpen={assistantModalOpen}
         onClose={() => setAssistantModalOpen(false)}
         onApplyCriteria={(milestones) => {
           setPresetMilestones(milestones);
-          setCreateModalOpen(true);
+          navigateTo('create');
         }}
       />
 
-      {/* Milestone Deliverable Submission */}
+      {/* Milestone Deliverable Submission Modal */}
       <SubmitDeliverableModal
         isOpen={Boolean(deliverableModalData)}
         onClose={() => setDeliverableModalData(null)}
@@ -588,11 +520,21 @@ export function App() {
         milestoneIdx={deliverableModalData?.milestoneIdx}
         milestone={deliverableModalData?.milestone}
         onSubmit={handleSubmitDeliverable}
-        busy={busy === 'submit_deliverable'}
+        busy={busy.startsWith('submit_')}
       />
 
-      <footer>
-        <p>Built natively for GenLayer StudioNet · Non-Deterministic AI Validator Consensus</p>
+      {/* Fallback Connect Wallet Modal */}
+      <ConnectWalletModal
+        isOpen={connectModalOpen}
+        onClose={() => setConnectModalOpen(false)}
+        onConnectSuccess={(address, provider) => {
+          setMe(address);
+          setClient(makeExtensionClient(address, provider));
+        }}
+      />
+
+      <footer style={{ marginTop: 60, padding: '24px 0', textAlign: 'center', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>
+        <p>ImpactVault · Milestone-Gated DAO Grants on GenLayer StudioNet · Non-Deterministic AI Validator Consensus</p>
       </footer>
     </div>
   );

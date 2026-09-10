@@ -40,22 +40,111 @@ body {
   min-height: 100vh;
 }
 
-.wrap {
-  max-width: 1080px;
+.app-container {
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 32px 20px 80px;
+  padding: 24px 20px 80px;
 }
 
-header {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
 }
 
-.brand {
+.navbar {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 16px;
-  align-items: flex-start;
+  padding: 12px 18px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  flex-wrap: wrap;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.logo-icon {
+  font-size: 28px;
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+}
+
+.brand-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #ffffff 40%, var(--accent-hover) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-sub {
+  margin-top: 2px;
+}
+
+.contract-badge {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.contract-badge:hover {
+  color: var(--cyan);
+}
+
+.nav-links {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nav-link-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-link-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.nav-link-btn.active {
+  color: #ffffff;
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.campaigns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 .logo {
